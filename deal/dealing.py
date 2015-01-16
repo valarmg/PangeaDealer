@@ -1,10 +1,9 @@
 from random import shuffle as randshuff
-from pot import pot
-from betting import betting
-from deuces.card import Card
-from deuces.evaluator import Evaluator
+from pot import PangeaPot
+from pangeabetting import PangeaBetting
 
-class Deal:
+
+class PangeaDeal:
 
     def __init__(self):
         pass
@@ -32,67 +31,99 @@ class Deal:
         return rank1 + suit1
 
     def deal_hand(self, table):
-        newP = pot(2)     #hardcoding in BB for the moment
-        Bet = betting(2)  #hardcoding in BB for the moment
-        table.new_deal()
-        table.hh.players_init_details(table)
-        Bet.post_blinds(table,newP)
-        table.hh.blinds_and_antes(table,newP.round_bet)
+        self.shuffle()
+        Bet = PangeaBetting(table._big_blind,table._small_blind)
+        for i in range(0,table._numplayers):
+            table.seats_array[i].reset_details_for_new_hand()
+        if table.init_deal():
+            newP = PangeaPot(table._big_blind, table._dealing_order)
 
-        table.hh.hole_cards_marker()
-        for i in table._dealing_order:
-            table.players[i].receive_hole_cards(self.deal_card(),self.deal_card())
-            table.hh.hole_cards(table.players[i])
+            table.hh.players_init_details(table)
+            Bet.post_blinds(table,newP)
+            table.hh.blinds_and_antes(table,table._big_blind,table._small_blind)
 
-        pre_bet_order = table._dealing_order[2:] + table._dealing_order[:2]
+            table.hh.hole_cards_marker()
+            for i in table._dealing_order:
+                table.seats_array[i].receive_hole_cards(self.deal_card(),self.deal_card())
+                table.hh.hole_cards(table.seats_array[i])
+
+            table.hh.player_positions_define(table)
+
+            self.deal_betting_section(table, Bet, newP)
+
+            newP.distribute_pots(table)
+
+            table.hh.summary(newP,self.board_cards)
+            table.hh.pl_summary(table,newP._total_pot)
+            return True
+        else:
+            print("Doesn't have two players, can't deal.")
+            return False
+
+    def deal_betting_section(self, table, Bet, newP):
+        if table._dealing_to == 2:
+            pre_bet_order = table._dealing_order[1:] + table._dealing_order[:1]
+        else:
+            pre_bet_order = table._dealing_order[2:] + table._dealing_order[:2]
         Bet.betting_round(table,newP,pre_bet_order)
+        newP.increment_round_and_sort_pots(table)
+
+        if self.is_there_uncontested_winner(table, newP):
+            self.board_cards = []
+            return
 
         self.board_cards = [self.deal_card(),self.deal_card(),self.deal_card()]
         table.hh.flop(self.board_cards)
-        Bet.betting_round(table,newP,table._dealing_order)
+
+
+        if len(table._betting_order) > 1:
+            Bet.betting_round(table,newP,table._dealing_order)
+            newP.increment_round_and_sort_pots(table)
+        if self.is_there_uncontested_winner(table, newP):
+            return
 
         self.board_cards += [self.deal_card()]
         table.hh.turn(self.board_cards)
-        Bet.betting_round(table,newP,table._dealing_order)
+
+        if len(table._betting_order) > 1:
+            Bet.betting_round(table,newP,table._dealing_order)
+            newP.increment_round_and_sort_pots(table)
+        if self.is_there_uncontested_winner(table, newP):
+            return
 
         self.board_cards += [self.deal_card()]
         table.hh.river(self.board_cards)
-        Bet.betting_round(table,newP,table._dealing_order)
 
+        if len(table._betting_order) > 1:
+            Bet.betting_round(table,newP,table._dealing_order)
+            newP.increment_round_and_sort_pots(table)
+        if self.is_there_uncontested_winner(table, newP):
+            return
 
         table.hh.showdown()
 
-        rk = [None] * table._dealing_to
-        sc = [None] * table._dealing_to
-        for i in range(0,table._dealing_to): #this gets more complicated when people fold, and even more with side pots
-            [rk[i],sc[i]] = self.evaluate_hand(self.board_cards,[table.players[i].hole1,table.players[i].hole2])
-            table.hh.player_show(table.players[i],rk[i])
-            table.players[i].showdown_ranking = rk[i]
-
-        winner = self.compare_hands(sc)
-        table.hh.player_won(table.players[winner],newP._pot)
-        table.hh.summary(newP,self.board_cards)
-        table.hh.pl_summary(table,newP._pot,winner)
+        for i in range(0, table._numplayers):
+            if table.seats_array[i].is_still_active():
+                table.seats_array[i].rank_hand(self.board_cards)
 
 
-        newP.distribute_pot(table.players[winner])
+    def is_there_uncontested_winner(self, table, pot):
+        players_left = 0
+        for i in table._dealing_order:
+            if table.seats_array[i].is_still_active():
+                seat_winner_i = i
+                players_left += 1
+        if players_left == 1:
+            pot._uncontested_winner = seat_winner_i
+            table.seats_array[seat_winner_i]._won_uncontested = True
+            return True
+        else:
+            return False
 
-    def evaluate_hand(self,board,hand):
-        dueces_board = [Card.new(board[0]),Card.new(board[1]),Card.new(board[2]),Card.new(board[3]),Card.new(board[4])]
-        dueces_hand = [Card.new(hand[0]),Card.new(hand[1])]
-        evaluator = Evaluator()
-        score = evaluator.evaluate(dueces_board, dueces_hand)
-        hand_rank = evaluator.get_rank_class(score)
-        hand_rank_str = evaluator.class_to_string(hand_rank)
-        return (hand_rank_str,score)
-
-    def compare_hands(self,list_of_scores):
-        return list_of_scores.index(min(list_of_scores))
-        #We'll have to handle splits later
 
 
 if __name__ == "__main__":
-    x = Deal()
+    x = PangeaDeal()
     x.shuffle()
 
 

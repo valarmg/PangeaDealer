@@ -1,29 +1,40 @@
 from random import randint
-from betting import betting
-from pot import pot
+from pangeabetting import PangeaBetting
+from pot import PangeaPot
+from seat import PangeaSeat
 from handhistory import HandHistory
+
 
 class PangeaTable:
 
     def __init__(self, table_type="Holdem NoLimit", table_limits="1/2", table_size=2):
-        self.__type = table_type
-        self.__limits = table_limits
+        self._type = table_type
+        self._limits = table_limits
         self._numplayers = table_size
         self.name = self.__create_name()
-        self.players = [None] * self._numplayers
+        self.__blinds_specify(table_limits)
+        self.seats_array = [None] * self._numplayers
         self._button = -1
-        self.hh = HandHistory(table_type,table_limits,table_size)
+        self.hh = HandHistory(table_type,table_limits,table_size)   #Creates a hh object for the table
+        for i in range(0,self._numplayers):
+            self.seats_array[i] = PangeaSeat(i)
 
+
+    def __blinds_specify(self,table_limits):
+        blinds_str = table_limits.split('/')
+        self._big_blind = int(blinds_str[1])
+        self._small_blind = int(blinds_str[0])
 
 
     def __create_name(self):
         id = randint(1000,9999)
-        #TODO: check if id is already used
+        #Later: change this to choose from list of tables and get Lobby to keep track
         return "table" + str(id)
 
-    def join_table(self,player,seat_num):
-        self.players[seat_num-1] = player
-        #If we are doing this async, have to worry about someone joining mid-deal
+    def join_table(self, player_name, seat_num, stack, type=0):
+        self.seats_array[seat_num-1].sit(player_name)
+        self.seats_array[seat_num-1].add_money_to_stack(stack)
+        self.seats_array[seat_num-1].type = type
 
     def leave_table(self,player):
         pass
@@ -32,11 +43,8 @@ class PangeaTable:
         out_str = ""
         for i in range(0,self._numplayers):
             out_str = out_str + "Seat" + str(i+1) + ":"
-            if self.players[i]:
-                out_str = out_str + self.players[i].name
-                out_str = out_str + "(" + str(self.players[i]._stack) + ")"
-            else:
-                out_str = out_str + "Empty"
+            out_str = out_str + self.seats_array[i].name
+            out_str = out_str + "(" + str(self.seats_array[i]._stack) + ")"
             out_str = out_str + "|"
         return out_str
 
@@ -46,36 +54,31 @@ class PangeaTable:
         else:
             self._button = (self._button + 1) % self._dealing_to   #button points to dealing_order array
 
-    def new_deal(self):
+    def init_deal(self):
         #set up table for new deal
         self._dealing_order = []
         self._dealing_to = 0
-        self.hh.summary_line()
+        self.hh.init_summary_line()
+
+
         for i in range(0,self._numplayers):
-            if self.players[i]:   #At the moment, everyone sitting is sitting in
+            if (self.seats_array[i].is_in_play()):
+                self._dealing_order.append(i)
                 self._dealing_to += 1
-                self.players[i].player_round_bet = 0
+        if (self._dealing_to > 1):
+            self.inc_button()           #button doesn't work perfectly when someone gets knocked out under this logic
 
-        self.inc_button()
+            self._dealing_order = self._dealing_order[self._button:] + self._dealing_order[:self._button]
 
-        for i in range(0,self._numplayers):
-            next_pl = (self._button + 1 + i) % self._numplayers
-            if self.players[next_pl]:   #At the moment, everyone sitting is sitting in
-                self._dealing_order.append(next_pl)
-
-        self._dealing_to = len(self._dealing_order)
+            self._betting_order = list(self._dealing_order)
+            return True
+        else:
+            return False
 
     def fold(self,player_no):
         self._dealing_order.remove(player_no)
 
 
-
-
-
-
 if __name__ == "__main__":
     x = PangeaTable()
     print(x.name)
-    #newP = pot()
-    #x.new_deal()
-    #x.post_blinds(newP)
