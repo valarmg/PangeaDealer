@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pangea Dealer</title>
+
+    <link rel="stylesheet" type="text/css" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pangea.css">
+
+    <script type="text/javascript" src="/js/bootstrap.min.js"></script>
+    <script src="http://code.jquery.com/jquery.min.js"></script>
+    <script>
+
+        $(document).ready(function () {
+
+            if (!("WebSocket" in window)) {
+                alert("Your browser does not support web sockets");
+                return;
+            }
+
+            var ws;
+
+            $("#open-button").click(function(evt) {
+                evt.preventDefault();
+
+                var port = $("#port").val();
+
+                ws = new WebSocket("ws://localhost:" + port + "/websocket");
+
+                ws.onopen = function(e) {
+                  //alert("Connection opened");
+                };
+
+                ws.onclose = function(e) {
+                  //alert("Connection closed");
+                };
+
+                ws.onmessage = function(e) {
+                    //alert(e.data);
+
+                    var selector = $('#received-messages');
+
+                    if (e.data) {
+                        var receivedData = selector.val();
+                        receivedData += e.data + "\n";
+                        selector.val(receivedData);
+                    }
+                };
+            });
+
+            $("#send-button").click(function(evt) {
+                evt.preventDefault();
+
+                var message = $("#send-data").val();
+
+                if (message) {
+                    if (ws == null) {
+                        alert("Websocket not connected");
+                    } else {
+                        ws.send(message.trim());
+                        var selector = $('#sent-messages');
+                        var sentData = selector.val()
+                        sentData += message
+                        selector.val(sentData)
+                    }
+                }
+            });
+
+            $("#clear-button").click(function(evt) {
+                evt.preventDefault();
+
+                $('#sent-messages').val("");
+                $('#received-messages').val("");
+            });
+
+            $("#close-button").click(function(evt) {
+                evt.preventDefault();
+                ws.close();
+            });
+
+            $("textarea").keydown(function(e) {
+                if(e.keyCode === 9) { // tab was pressed
+                    // get caret position/selection
+                    var start = this.selectionStart;
+                    var end = this.selectionEnd;
+
+                    var $this = $(this);
+                    var value = $this.val();
+
+                    // set textarea value to: text before caret + tab + text after caret
+                    $this.val(value.substring(0, start)
+                                + "\t"
+                                + value.substring(end));
+
+                    // put caret at right position again (add one for the tab)
+                    this.selectionStart = this.selectionEnd = start + 1;
+
+                    // prevent the focus lose
+                    e.preventDefault();
+                }
+            });
+
+        });
+    </script>
+
+</head>
+<body>
+
+    <div class="container-fluid">
+
+        <div class="row-fluid well-small">
+            Online json formatter: <a href="http://json.parser.online.fr/" target="_blank">http://json.parser.online.fr/</a>
+        </div>
+
+        <div class="row-fluid">
+            <div class="input-group input-group-sm">
+                <span class="input-group-addon">WebSocket port:
+                    <input type="text" readonly="readonly" class="form-control-static" id="port" value="{{ port }}">
+                </span>
+            </div>
+        </div>
+
+        <div class="well">
+            <label for="send-data">Send message:</label>
+            <textarea id="send-data" rows="10" cols="100" class="row-fluid" spellcheck="false">
+                { "message_type": "poll" }
+            </textarea>
+
+            <br/>
+
+            <button id="open-button" class="btn btn-primary">Open</button>
+            <button id="close-button" class="btn btn-primary">Close</button>
+            <button id="send-button" class="btn btn-primary">Send</button>
+        </div>
+
+        <div class="well">
+
+            <p>Messages</p>
+
+            <div class="row-fluid">
+                <textarea id="sent-messages" class="span6" rows="20" cols="100" spellcheck="false" placeholder="Sent messages"></textarea>
+                <textarea id="received-messages" class="span6" rows="20" cols="100" spellcheck="false" placeholder="Received messages"></textarea>
+            </div>
+
+            <div class="row-fluid">
+                <button id="clear-button" class="btn btn-primary">Clear</button>
+            </div>
+        </div>
+
+        <div class="well">
+            <p>Example requests</p>
+
+            <div class="row-fluid">
+
+                <textarea class="span12" rows="10" cols="100" spellcheck="false" >
+                    {{ example_requests }}
+                </textarea>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
