@@ -43,7 +43,10 @@ class PangeaDb(object):
         self.db.lobby.remove({})
 
     def lobby_get_by_id(self, lobby_id):
-        return self.db.lobby.find_one({"_id": as_objectid(lobby_id)})
+        lobby = self.db.lobby.find_one({"_id": as_objectid(lobby_id)})
+        if lobby is None:
+            raise PangeaException(PangaeaErrorCodes.NotFoundError, "Lobby not found")
+        return lobby
 
     def lobby_get_all(self):
         return list(self.db.lobby.find())
@@ -63,18 +66,21 @@ class PangeaDb(object):
         table_id = as_objectid(table_id)
         table = self.db.table.find_one({"_id": table_id})
 
-        self.db.lobby.update({"_id": as_objectid(table.lobby_id)}, {"pull": {"tables": table_id}})
-        self.db.table.remove({"_id": table_id})
+        if table is not None:
+            self.db.lobby.update({"_id": as_objectid(table.lobby_id)}, {"pull": {"tables": table_id}})
+            self.db.table.remove({"_id": table_id})
 
     def table_get_by_id(self, table_id):
         table = self.db.table.find_one({"_id": as_objectid(table_id)})
-
         if table is None:
             raise PangeaException(PangaeaErrorCodes.NotFoundError, "Table not found")
         return table
 
     def table_get_by_lobby_id(self, lobby_id):
         return list(self.db.table.find({"lobby_id": as_objectid(lobby_id)}))
+
+    def table_get_all(self):
+        return list(self.db.table.find())
 
     # --  Player -- #
     def player_create(self, player):
@@ -84,7 +90,10 @@ class PangeaDb(object):
         self.db.player.update(player)
 
     def player_get_by_id(self, player_id):
-        return self.db.player.find_one({"_id": as_objectid(player_id)})
+        player = self.db.player.find_one({"_id": as_objectid(player_id)})
+        if player is None:
+            raise PangeaException(PangaeaErrorCodes.NotFoundError, "Player not found")
+        return player
 
     def player_get_by_table_id(self, table_id):
         player_ids = self.db.table.find_one({"_id": as_objectid(table_id)}).players

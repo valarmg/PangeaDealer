@@ -12,148 +12,149 @@
 
         $(document).ready(function () {
 
-            if (!("WebSocket" in window)) {
-                alert("Your browser does not support web sockets");
-                return;
-            }
-
-            var ws;
-
-            $("#open-button").click(function(evt) {
+            $("#post-button").click(function(evt) {
                 evt.preventDefault();
-
-                var port = $("#port").val();
-
-                ws = new WebSocket("ws://localhost:" + port + "/websocket");
-
-                ws.onopen = function(e) {
-                  //alert("Connection opened");
-                };
-
-                ws.onclose = function(e) {
-                  //alert("Connection closed");
-                };
-
-                ws.onmessage = function(e) {
-                    //alert(e.data);
-
-                    var selector = $('#received-messages');
-
-                    if (e.data) {
-                        var receivedData = selector.val();
-                        receivedData += e.data + "\n";
-                        selector.val(receivedData);
-                    }
-                };
+                sendRequest("POST");
             });
 
-            $("#send-button").click(function(evt) {
+            $("#get-button").click(function(evt) {
                 evt.preventDefault();
+                sendRequest("GET");
+            });
 
-                var message = $("#send-data").val();
+            $("#put-button").click(function(evt) {
+                evt.preventDefault();
+                sendRequest("PUT");
+            });
 
-                if (message) {
-                    if (ws == null) {
-                        alert("Websocket not connected");
-                    } else {
-                        ws.send(message.trim());
-                        var selector = $('#sent-messages');
-                        var sentData = selector.val()
-                        sentData += message
-                        selector.val(sentData)
-                    }
-                }
+            $("#delete-button").click(function(evt) {
+                evt.preventDefault();
+                sendRequest("DELETE");
             });
 
             $("#clear-button").click(function(evt) {
                 evt.preventDefault();
 
-                $('#sent-messages').val("");
-                $('#received-messages').val("");
+                $('#response-body').val("");
             });
 
-            $("#close-button").click(function(evt) {
+            $("#format-button").click(function(evt) {
                 evt.preventDefault();
-                ws.close();
+
+                var selector = $('#response-body');
+
+                var value = selector.val();
+                if (value) {
+                    value = JSON.stringify(JSON.parse(value), null, 2);
+                    selector.val(value);
+                }
             });
 
             $("textarea").keydown(function(e) {
-                if(e.keyCode === 9) { // tab was pressed
-                    // get caret position/selection
+                if(e.keyCode === 9) { // Tab was pressed
+                    // Get caret position/selection
                     var start = this.selectionStart;
                     var end = this.selectionEnd;
 
                     var $this = $(this);
                     var value = $this.val();
 
-                    // set textarea value to: text before caret + tab + text after caret
-                    $this.val(value.substring(0, start)
-                                + "\t"
-                                + value.substring(end));
+                    // Set text area value to: text before caret + tab + text after caret
+                    $this.val(value.substring(0, start) + "\t" + value.substring(end));
 
-                    // put caret at right position again (add one for the tab)
+                    // Put caret at right position again (add one for the tab)
                     this.selectionStart = this.selectionEnd = start + 1;
 
-                    // prevent the focus lose
+                    // Prevent the focus lose
                     e.preventDefault();
                 }
             });
 
+            function sendRequest(method) {
+                var responseBodySelector = $('#response-body');
+
+                var endpoint = $('#server-url-endpoint').val();
+                var data = $("#request-data").val();
+
+                if (!endpoint) {
+                    alert("Endpoint must be set");
+                    return;
+                }
+
+                endpoint = "api/" + endpoint.trim();
+
+                $.ajax({
+                    type: method,
+                    url: endpoint,
+                    data: data,
+                    contentType: "application/json"
+                }).done(function(data) {
+                    responseBodySelector.val("")
+
+                    if (data) {
+                        if ($('#format-checkbox').prop('checked'))
+                            responseBodySelector.val(JSON.stringify(data, null, 2));
+                        else
+                            responseBodySelector.val(JSON.stringify(data));
+                    }
+                }).fail(function(jqXHR, textStatus) {
+                    alert("Request failed: " + textStatus)
+                });
+            }
         });
     </script>
 
 </head>
 <body>
-
     <div class="container-fluid">
-
-        <div class="row-fluid well-small">
-            Online json formatter: <a href="http://json.parser.online.fr/" target="_blank">http://json.parser.online.fr/</a>
+        <div class="well">
+            <span><strong>Valid routes</strong></span>
+            <ul>
+                {% for route in routes %}
+                    {% block route %}
+                        <li>{{ route }}</li>
+                    {% end %}
+                {% end %}
+            </ul>
         </div>
 
-        <div class="row-fluid">
-            <div class="input-group input-group-sm">
-                <span class="input-group-addon">WebSocket port:
-                    <input type="text" readonly="readonly" class="form-control-static" id="port" value="{{ port }}">
+        <div class="row-fluid well-small form-horizontal">
+            <div class="input-group form-group">
+                <span class="input-group-addon" id="endpoint-addon">
+                    Endpoint: http://localhost:{{port}}/api/
                 </span>
+
+                <input type="text" id="server-url-endpoint" aria-describedby="endpoint-addon"
+                       class="form-control span10" value="tables">
             </div>
         </div>
 
         <div class="well">
-            <label for="send-data">Send message:</label>
-            <textarea id="send-data" rows="10" cols="100" class="row-fluid" spellcheck="false">
-                { "message_type": "poll" }
+            <label for="request-body"><strong>Request message:</strong></label>
+            <textarea id="request-body" rows="10" cols="100" class="row-fluid" spellcheck="false">
+                {}
             </textarea>
 
             <br/>
-
-            <button id="open-button" class="btn btn-primary">Open</button>
-            <button id="close-button" class="btn btn-primary">Close</button>
-            <button id="send-button" class="btn btn-primary">Send</button>
+            <button id="get-button" class="btn">Get</button>
+            <button id="post-button" class="btn">Post</button>
+            <button id="put-button" class="btn">Put</button>
+            <button id="delete-button" class="btn">Delete</button>
         </div>
 
         <div class="well">
+            <label for="response-body"><strong>Response message:</strong></label>
+            <textarea id="response-body" rows="30" cols="100" class="row-fluid" spellcheck="false"></textarea>
 
-            <p>Messages</p>
+            <br/>
+            <button id="clear-button" class="btn">Clear</button>
+            <button id="format-button" class="btn">Format</button>
 
-            <div class="row-fluid">
-                <textarea id="sent-messages" class="span6" rows="20" cols="100" spellcheck="false" placeholder="Sent messages"></textarea>
-                <textarea id="received-messages" class="span6" rows="20" cols="100" spellcheck="false" placeholder="Received messages"></textarea>
-            </div>
-
-            <div class="row-fluid">
-                <button id="clear-button" class="btn btn-primary">Clear</button>
-            </div>
-        </div>
-
-        <div class="well">
-            <p>Example requests</p>
-
-            <div class="row-fluid">
-
-                <textarea class="span12" rows="10" cols="100" spellcheck="false" >
-                    {{ example_requests }}
-                </textarea>
+            <div class="checkbox">
+                <label>
+                    <input type="checkbox" id="format-checkbox" value="format" checked="true">
+                    Automatically format response?
+                </label>
             </div>
         </div>
     </div>

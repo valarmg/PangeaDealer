@@ -1,46 +1,49 @@
 import os
 import logging
-
 from tornado.options import parse_command_line
 from tornado.ioloop import IOLoop
 from tornado.web import Application, StaticFileHandler
 from tornado.httpserver import HTTPServer
-
-from server.handler import IndexHandler, WsHandler
 from managers.client import ClientManager
+from api.handlers import *
 
-
-#define("port", default=8888, help="Run on the given port", type=int)
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
-class PangeaApplication(Application):
+class PangeaApp(Application):
+
     def __init__(self, port):
-        client_manager = ClientManager()
+        self.port = port
+        object_id_regex = "[0-9a-fA-F]{24}"
 
         handlers = [
-            (r"/", IndexHandler, dict(port=port)),
-            (r"/websocket", WsHandler, dict(client_manager=client_manager)),
+            (r"/", IndexHandler),
             (r"/css/(.*)", StaticFileHandler, {"path": "./static/css"}),
             (r"/js/(.*)", StaticFileHandler, {"path": "./static/js"}),
+            (r"/api/lobbies/({0})".format(object_id_regex), LobbyHandler),
+            (r"/api/lobbies$", LobbyHandler),
+            (r"/api/tables/({0})".format(object_id_regex), TableHandler),
+            (r"/api/tables$", TableHandler)
         ]
+
         settings = dict(
             template_path=os.path.join(os.path.dirname(__file__), "templates"),
             static_path=os.path.join(os.path.dirname(__file__), "static"),
+            #debug=True
         )
         Application.__init__(self, handlers, **settings)
 
-if __name__ == '__main__':
-    wsport = 10004
+    def get_routes(self):
+        return [handler.regex.pattern for handler in self.handlers[0][1] if handler.regex.pattern.startswith("/api")]
 
-    logger.info("http://localhost:{0}/".format(wsport))
-    logger.info("Listening with web sockets on port {0}".format(wsport))
-
-    #parse_command_line()
-    application = PangeaApplication(wsport)
+if __name__ == "__main__":
+    server_port = 10006
+    application = PangeaApp(server_port)
     server = HTTPServer(application)
 
-    server.listen(wsport)
+    logger.debug("Running server on http://localhost:{0}".format(server_port))
+
+    server.listen(server_port)
     IOLoop.instance().start()

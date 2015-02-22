@@ -8,8 +8,8 @@ logger = logging.getLogger(__name__)
 
 
 class TableService(PangeaDbServiceBase):
-    def __init__(self, db, client_manager):
-        super().__init__(db, client_manager)
+    def __init__(self, db):
+        super().__init__(db)
 
     def create_table(self, lobby_id, name):
         logger.debug("create_table, lobby_id: {0}, name: {1}".format(lobby_id, name))
@@ -34,26 +34,27 @@ class TableService(PangeaDbServiceBase):
         self.db.player_leave_table(table_id, player_id)
         self.fire_table_update(table)
 
-    def get_tables(self, client, lobby_id):
-        logger.debug("get_tables")
+    def get_tables(self, lobby_id):
+        logger.debug("get_tables, lobby_id: {0}".format(lobby_id))
 
-        tables = self.db.table_get_by_lobby_id(lobby_id)
+        if lobby_id:
+            tables = self.db.table_get_by_lobby_id(lobby_id)
+        else:
+            tables = self.db.table_get_all()
 
         data = []
         for table in tables:
             data.append(models.Table.from_db(table))
 
-        message = PangeaMessage(tables=data)
-        client.send_message(message)
+        return PangeaMessage(tables=data)
 
-    def get_table(self, client, table_id):
+    def get_table(self, table_id):
         logger.debug("get_table, table_id: {0}".format(table_id))
 
         table = self.db.table_get_by_id(table_id)
         model = models.Table.from_db(table)
 
-        message = PangeaMessage(table=model)
-        client.send_message(message)
+        return PangeaMessage(table=model)
 
     def fire_table_update(self, table):
         logger.debug("fire_table_update: {0}".format(table.table_id))

@@ -1,5 +1,4 @@
 class PangeaDbServiceBase(object):
-    def __init__(self, db, client_manager):
+    def __init__(self, db):
         self.db = db
-        self.client_manager = client_manager
 

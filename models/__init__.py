@@ -15,6 +15,7 @@ class Round(Enum):
 
 
 class ModelBase(object):
+    id = None
 
     def to_dict(self):
         return {}
@@ -33,7 +34,6 @@ class ModelBase(object):
 
 
 class Lobby(ModelBase):
-    id = None
     name = None
     tables = []
 
@@ -50,7 +50,6 @@ class Lobby(ModelBase):
 
 
 class Table(ModelBase):
-    id = None
     name = None
     seats = []
     dealer_seat_number = None
@@ -77,15 +76,16 @@ class Table(ModelBase):
         return model
 
     def to_dict(self):
-        return {
+        result = {
             "id": self.id,
             "name": self.name,
-            "dealer_seat_number": self. dealer_seat_number,
+            "dealer_seat_number": self.dealer_seat_number,
             "current_round": self.current_round,
             "seats": [x.to_dict() for x in self.seats],
             "table_cards": self.table_cards,
             "deck_cards": self.deck_cards
         }
+        return remove_nulls(result)
 
 
 class Seat(ModelBase):
@@ -113,7 +113,7 @@ class Seat(ModelBase):
         return model
 
     def to_dict(self):
-        return {
+        result = {
             "name": self.name,
             "seat_number": self.seat_number,
             "player_id": self.player_id,
@@ -121,3 +121,4 @@ class Seat(ModelBase):
             "stack": self.stack,
             "cards": self.cards
         }
+        return remove_nulls(result)

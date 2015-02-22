@@ -10,8 +10,8 @@ class PangeaJsonEncoder(JSONEncoder):
             return str(obj)
         if hasattr(obj, 'isoformat'):
             return obj.isoformat()
-        if hasattr(obj, 'to_json'):
-            return obj.to_json()
+        if hasattr(obj, 'to_dict'):
+            return obj.to_dict()
 
         return JSONEncoder.default(self, obj)
 
