@@ -17,6 +17,14 @@ class PangeaApp(Application):
         self.port = port
         object_id_regex = "[0-9a-fA-F]{24}"
 
+        if "OPENSHIFT_REPO_DIR" in os.environ:
+            static_path = os.path.join(os.environ['OPENSHIFT_REPO_DIR'], "static")
+            template_path = os.path.join(os.environ['OPENSHIFT_REPO_DIR'], "templates")
+        else:
+            static_path = os.path.join(os.path.dirname(__file__), "static")
+            template_path = os.path.join(os.path.dirname(__file__), "templates")
+
+
         handlers = [
             (r"/", IndexHandler),
             (r"/css/(.*)", StaticFileHandler, {"path": "./static/css"}),
@@ -33,8 +41,8 @@ class PangeaApp(Application):
         ]
 
         settings = dict(
-            template_path=os.path.join(os.path.dirname(__file__), "templates"),
-            static_path=os.path.join(os.path.dirname(__file__), "static"),
+            template_path=template_path,
+            static_path=static_path,
             #debug=True
         )
         Application.__init__(self, handlers, **settings)
@@ -43,11 +51,13 @@ class PangeaApp(Application):
         return [handler.regex.pattern for handler in self.handlers[0][1] if handler.regex.pattern.startswith("/api")]
 
 if __name__ == "__main__":
-    server_port = 10006
+    ip = os.environ["OPENSHIFT_PYTHON_IP"] if "OPENSHIFT_PYTHON_IP" in os.environ else "localhost"
+    server_port = int(os.environ["OPENSHIFT_PYTHON_PORT"]) if "OPENSHIFT_PYTHON_PORT" in os.environ else 10006
+
     application = PangeaApp(server_port)
     server = HTTPServer(application)
 
-    logger.debug("Running server on http://localhost:{0}".format(server_port))
+    logger.debug("Running server on http://{0}:{1}".format(ip, server_port))
 
-    server.listen(server_port)
+    server.listen(server_port, ip)
     IOLoop.instance().start()
