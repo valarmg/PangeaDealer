@@ -4,6 +4,7 @@ from enum import Enum
 
 
 def remove_nulls(obj):
+    # TODO: Probably need to check for nulls in any sub dictionaries?
     return dict((k, v) for k, v in obj.items() if v is not None)
 
 
@@ -54,7 +55,7 @@ class Table(ModelBase):
     seats = []
     dealer_seat_number = None
     current_round = None
-    table_cards = []
+    board_cards = []
     deck_cards = []
 
     @staticmethod
@@ -65,7 +66,7 @@ class Table(ModelBase):
         model.name = document.get("name")
         model.dealer_seat_number = document.get("dealer_seat_number")
         model.current_round = document.get("current_round")
-        model.table_cards = document.get("table_cards")
+        model.board_cards = document.get("board_cards")
         model.deck_cards = document.get("deck_cards")
 
         seat_documents = document.get("seats", list())
@@ -82,43 +83,151 @@ class Table(ModelBase):
             "dealer_seat_number": self.dealer_seat_number,
             "current_round": self.current_round,
             "seats": [x.to_dict() for x in self.seats],
-            "table_cards": self.table_cards,
+            "board_cards": self.board_cards,
             "deck_cards": self.deck_cards
         }
         return remove_nulls(result)
 
 
-class Seat(ModelBase):
-    seat_number = None
-    player_id = None
-    player_name = None
-    stack = None
-    cards = []
-
-    def __init__(self, player_id=None, player_name=None, seat_number=None, stack=None, cards=[]):
-        self.player_id = player_id
-        self.player_name = player_name
-        self.seat_number = seat_number
-        self.stack = stack
-        self.cards = cards
+class Player(ModelBase):
+    username = None
 
     @staticmethod
     def from_db(document):
-        model = Seat()
-        model.number = document.get("seat_number")
-        model.player_id = document.get("player_id")
-        model.player_name = document.get("player_name")
-        model.stack = document.get("stack")
-        model.cards = document.get("cards")
+        model = Player()
+        model.id = document.get("_id")
+        model.username = document.get("username")
         return model
 
     def to_dict(self):
         result = {
-            "name": self.name,
+            "id": self.id,
+            "username": self.username
+        }
+        return result
+
+
+class Seat(ModelBase):
+    player_id = None
+    seat_number = None
+    username = None
+    stack = None
+    hole_cards = []
+
+    @staticmethod
+    def from_db(document):
+        model = Seat()
+        model.seat_number = document.get("seat_number")
+        model.player_id = document.get("player_id")
+        model.username = document.get("username")
+        model.stack = document.get("stack")
+        model.hole_cards = document.get("hole_cards")
+        return model
+
+    def to_dict(self):
+        result = {
             "seat_number": self.seat_number,
             "player_id": self.player_id,
-            "player_name": self.player_name,
+            "username": self.username,
             "stack": self.stack,
-            "cards": self.cards
+            "hole_cards": self.hole_cards
         }
         return remove_nulls(result)
+
+
+class ChatMessage(ModelBase):
+    PLAYER_TABLE_JOIN = "Player {0} has joined the table"
+    PLAYER_TABLE_LEAVE = "Player {0} has left the table"
+    PLAYER_BET = "Player {0} has bet {1}"
+
+    message = None
+    player_name = None
+
+    def __init__(self, message=None, player_name=None):
+        self.message = message
+        self.player_name = player_name
+
+    @staticmethod
+    def from_db_list(documents):
+        models = []
+        for document in documents:
+            model = ChatMessage.from_db(document)
+            models.append(model)
+
+        return models
+
+    @staticmethod
+    def from_db(document):
+        model = ChatMessage()
+        model.id = document.get("_id")
+        model.message = document.get("message")
+        model.player_name = document.get("player_name")
+        return model
+
+    def to_dict(self):
+        result = {
+            "id": self.id,
+            "message": self.message,
+            "player_name": self.player_name
+        }
+        return result
+
+
+class TableEvent(ModelBase):
+    PLAYER_JOIN_TABLE = "player_join"
+    PLAYER_LEAVE_TABLE = "player_leave"
+    PLAYER_BET = "player_bet"
+
+    event_name = None
+    table_id = None
+    player_id = None
+
+    @staticmethod
+    def from_db_list(documents):
+        models = []
+        for document in documents:
+            model = TableEvent.from_db(document)
+            models.append(model)
+
+        return models
+
+    @staticmethod
+    def from_db(document):
+        model = TableEvent()
+        model.id = document.get("_id")
+        model.name = document.get("event_name")
+        model.table_id = document.get("table_id")
+        model.player_id = document.get("player_id")
+        return model
+
+    def to_dict(self):
+        result = {
+            "id": self.id,
+            "event_name": self.name,
+            "table_id": self.table_id,
+            "player_id": self.player_id
+        }
+        return result
+
+
+class Bet(ModelBase):
+    table_id = None
+    player_id = None
+    amount = None
+
+    @staticmethod
+    def from_db(document):
+        model = Bet()
+        model.id = document.get("_id")
+        model.table_id = document.get("table_id")
+        model.player_id = document.get("player_id")
+        model.amount = document.get("amount")
+
+    def to_dict(self):
+        result = {
+            "id": self.id,
+            "table_id": self.table_id,
+            "player_Id": self.player_id,
+            "amount": self.amount
+        }
+        return result

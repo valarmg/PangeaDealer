@@ -4,7 +4,6 @@ from tornado.options import parse_command_line
 from tornado.ioloop import IOLoop
 from tornado.web import Application, StaticFileHandler
 from tornado.httpserver import HTTPServer
-from managers.client import ClientManager
 from api.handlers import *
 
 
@@ -25,7 +24,12 @@ class PangeaApp(Application):
             (r"/api/lobbies/({0})".format(object_id_regex), LobbyHandler),
             (r"/api/lobbies$", LobbyHandler),
             (r"/api/tables/({0})".format(object_id_regex), TableHandler),
-            (r"/api/tables$", TableHandler)
+            (r"/api/tables/status/({0})".format(object_id_regex), TableStatusHandler),
+            (r"/api/tables$", TableHandler),
+            (r"/api/players$", PlayerHandler),
+            (r"/api/players/({0})".format(object_id_regex), PlayerHandler),
+            (r"/api/seats$", SeatsHandler),
+            (r"/api/bets$", BetHandler)
         ]
 
         settings = dict(

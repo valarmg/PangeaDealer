@@ -1,5 +1,4 @@
 import logging
-from utils.messages import PangeaMessage
 from services import PangeaDbServiceBase
 
 logger = logging.getLogger(__name__)

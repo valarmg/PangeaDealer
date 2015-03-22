@@ -1,7 +1,7 @@
 import logging
 from services import PangeaDbServiceBase
 from utils.messages import PangeaMessage
-from utils.errors import PangeaException, PangaeaErrorCodes
+from utils.errors import PangeaException, PangaeaDealerErrorCodes
 import models
 
 logger = logging.getLogger(__name__)
