@@ -20,7 +20,12 @@ class IndexHandler(RequestHandler):
         pass
 
     def get(self):
-        self.render("index.html", host_name=self.application.host_name, port=self.application.port, routes=self.application.get_routes())
+        if self.application.port == 8080:
+            base_url = "http://{0}".format(self.application.host_name)
+        else:
+            base_url = "http://{0}:{1}".format(self.application.host_name, self.application.port)
+
+        self.render("index.html", base_url=base_url, routes=self.application.get_routes())
 
 
 class ApiHandler(RequestHandler):
