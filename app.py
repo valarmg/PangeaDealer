@@ -26,15 +26,6 @@ class PangeaApp(WSGIApplication):
              static_path = os.path.join(os.path.dirname(__file__), "static")
              template_path = os.path.join(os.path.dirname(__file__), "templates")
 
-        #static_path = os.path.join(os.path.dirname(__file__), "static")
-        #template_path = os.path.join(os.path.dirname(__file__), "templates")
-
-        for item in os.environ:
-            logger.debug("{0}={1}".format(item, os.environ[item]))
-
-        logger.debug("static_path: " + static_path)
-        logger.debug("template_path: " + template_path)
-
         handlers = [
             (r"/", IndexHandler),
             (r"/css/(.*)", StaticFileHandler, {"path": "./static/css"}),
@@ -44,8 +35,8 @@ class PangeaApp(WSGIApplication):
             (r"/api/tables/({0})".format(object_id_regex), TableHandler),
             (r"/api/tables/status/({0})".format(object_id_regex), TableStatusHandler),
             (r"/api/tables$", TableHandler),
-            (r"/api/players$", PlayerHandler),
             (r"/api/players/({0})".format(object_id_regex), PlayerHandler),
+            (r"/api/players$", PlayerHandler),
             (r"/api/seats$", SeatsHandler),
             (r"/api/bets$", BetHandler)
         ]

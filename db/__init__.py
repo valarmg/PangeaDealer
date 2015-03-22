@@ -1,4 +1,5 @@
 import os
+import logging
 from pymongo import MongoClient
 from bson import ObjectId
 from utils.errors import PangeaException, PangaeaDealerErrorCodes
@@ -23,6 +24,8 @@ def get_id(obj):
 
 class PangeaDb(object):
     def __init__(self):
+        self.logger = logging.getLogger(__name__)
+
         if "OPENSHIFT_MONGODB_DB_URL" in os.environ:
             self.client = MongoClient(os.environ["OPENSHIFT_MONGODB_DB_URL"])
         else:
@@ -128,8 +131,19 @@ class PangeaDb(object):
         return player is not None
 
     def player_get_by_table_id(self, table_id):
-        player_ids = self.db.table.find_one({"_id": as_objectid(table_id)}).players
-        return self.db.player.find({"_id": player_ids})
+        table = self.db.table.find_one({"_id": as_objectid(table_id)}, {"seats"})
+        if table and "seats" in table:
+            player_ids = []
+            for item in table["seats"]:
+                if "player_id" in item:
+                    player_id = as_objectid(item["player_id"])
+                    player_ids.append(player_id)
+            
+            return list(self.db.player.find({"_id": {"$in": player_ids}}))
+        return list()
+
+    def player_get_all(self):
+        return list(self.db.player.find({}))
 
     def player_join_table(self, table_id, player_id, username, seat_number, stack):
         seat = {"player_id": player_id, "username": username, "seat_number": seat_number, "stack": stack}

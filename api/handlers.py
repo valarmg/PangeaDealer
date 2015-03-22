@@ -129,11 +129,12 @@ class TableStatusHandler(ApiHandler):
 
 class PlayerHandler(ApiHandler):
 
-    def get(self, player_id):
+    def get(self, player_id=None, ):
         if player_id:
             response = self.player_service.get_player(player_id)
         else:
-            response = self.player_service.get_players()
+            table_id = self.get_query_argument("table_id", None, True)
+            response = self.player_service.get_players(table_id)
 
         self.send_pangea_response(response)
 
