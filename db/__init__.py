@@ -138,7 +138,7 @@ class PangeaDb(object):
                 if "player_id" in item:
                     player_id = as_objectid(item["player_id"])
                     player_ids.append(player_id)
-            
+
             return list(self.db.player.find({"_id": {"$in": player_ids}}))
         return list()
 
