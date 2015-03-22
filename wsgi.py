@@ -26,6 +26,9 @@ class PangeaApp(WSGIApplication):
             static_path = os.path.join(os.path.dirname(__file__), "static")
             template_path = os.path.join(os.path.dirname(__file__), "templates")
 
+        for item in os.environ:
+            logger.debug("{0}={1}".format(item, os.environ[item]))
+
 
         handlers = [
             (r"/", IndexHandler),
