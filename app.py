@@ -2,7 +2,8 @@ import os
 import logging
 from tornado.options import parse_command_line
 from tornado.ioloop import IOLoop
-from tornado.web import Application, StaticFileHandler
+from tornado.wsgi import WSGIApplication
+from tornado.web import StaticFileHandler
 from tornado.httpserver import HTTPServer
 from api.handlers import *
 
@@ -11,7 +12,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
-class PangeaApp(Application):
+class PangeaApp(WSGIApplication):
 
     def __init__(self, port):
         self.port = port
@@ -45,14 +46,33 @@ class PangeaApp(Application):
             static_path=static_path,
             #debug=True
         )
-        Application.__init__(self, handlers, **settings)
+        WSGIApplication.__init__(self, handlers, **settings)
 
     def get_routes(self):
         return [handler.regex.pattern for handler in self.handlers[0][1] if handler.regex.pattern.startswith("/api")]
 
+
+def setup_virtual_environment():
+    if "OPENSHIFT_PYTHON_DIR" in os.environ:
+        virtenv = os.environ["OPENSHIFT_PYTHON_DIR"] + "/virtuenv/"
+        virtualenv = os.path.join(virtenv, 'bin/activate_this.py')
+
+        try:
+            exec_namespace = dict(__file__=virtualenv)
+            with open(virtualenv, 'rb') as exec_file:
+                file_contents = exec_file.read()
+            compiled_code = compile(file_contents, virtualenv, 'exec')
+            exec(compiled_code, exec_namespace)
+        except IOError:
+            pass
+
+
 if __name__ == "__main__":
     ip = os.environ["OPENSHIFT_PYTHON_IP"] if "OPENSHIFT_PYTHON_IP" in os.environ else "localhost"
     server_port = int(os.environ["OPENSHIFT_PYTHON_PORT"]) if "OPENSHIFT_PYTHON_PORT" in os.environ else 10006
+    host_name = os.environ["OPENSHIFT_GEAR_DNS"] if "OPENSHIFT_GEAR_DNS" in os.environ else "localhost"
+
+    setup_virtual_environment()
 
     application = PangeaApp(server_port)
     server = HTTPServer(application)
