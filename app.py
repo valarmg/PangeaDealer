@@ -19,15 +19,15 @@ class PangeaApp(WSGIApplication):
         self.host_name = host_name
         object_id_regex = "[0-9a-fA-F]{24}"
 
-        # if "OPENSHIFT_REPO_DIR" in os.environ:
-        #     static_path = os.path.join(os.environ['OPENSHIFT_REPO_DIR'], "static")
-        #     template_path = os.path.join(os.environ['OPENSHIFT_REPO_DIR'], "templates")
-        # else:
-        #     static_path = os.path.join(os.path.dirname(__file__), "static")
-        #     template_path = os.path.join(os.path.dirname(__file__), "templates")
+        if "OPENSHIFT_REPO_DIR" in os.environ:
+             static_path = os.path.join(os.environ['OPENSHIFT_REPO_DIR'], "static")
+             template_path = os.path.join(os.environ['OPENSHIFT_REPO_DIR'], "templates")
+        else:
+             static_path = os.path.join(os.path.dirname(__file__), "static")
+             template_path = os.path.join(os.path.dirname(__file__), "templates")
 
-        static_path = os.path.join(os.path.dirname(__file__), "static")
-        template_path = os.path.join(os.path.dirname(__file__), "templates")
+        #static_path = os.path.join(os.path.dirname(__file__), "static")
+        #template_path = os.path.join(os.path.dirname(__file__), "templates")
 
         for item in os.environ:
             logger.debug("{0}={1}".format(item, os.environ[item]))
