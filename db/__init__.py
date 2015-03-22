@@ -1,3 +1,4 @@
+import os
 from pymongo import MongoClient
 from bson import ObjectId
 from utils.errors import PangeaException, PangaeaDealerErrorCodes
@@ -22,9 +23,22 @@ def get_id(obj):
 
 class PangeaDb(object):
     def __init__(self):
-        self.host = "localhost"
-        self.port = 27017
-        self.client = MongoClient(self.host, self.port)
+
+        #if "OPENSHIFT_MONGODB_DB_HOST" in os.environ:
+        #    self.host = os.environ["OPENSHIFT_MONGODB_DB_HOST"]
+        #else:
+        #    self.host = "localhost"
+        #if "OPENSHIFT_MONGODB_DB_PORT" in os.environ:
+        #    self.port = os.environ["OPENSHIFT_MONGODB_DB_PORT"]
+        #else:
+        #    self.port = 27017
+        #self.client = MongoClient(self.host, self.port)
+
+        if "OPENSHIFT_MONGODB_DB_URL" in os.environ:
+            self.client = MongoClient(os.environ["OPENSHIFT_MONGODB_DB_URL"])
+        else:
+            self.client = MongoClient("localhost", 27017)
+
         self.db = self.client.pangea
 
     # -- Lobby -- #

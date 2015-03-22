@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 
 class PangeaApp(WSGIApplication):
 
-    def __init__(self, port):
+    def __init__(self, port, host_name):
         self.port = port
+        self.host_name = host_name
         object_id_regex = "[0-9a-fA-F]{24}"
 
         if "OPENSHIFT_REPO_DIR" in os.environ:
@@ -68,14 +69,14 @@ def setup_virtual_environment():
 
 setup_virtual_environment()
 
-ip = os.environ["OPENSHIFT_PYTHON_IP"] if "OPENSHIFT_PYTHON_IP" in os.environ else "localhost"
+server_ip = os.environ["OPENSHIFT_PYTHON_IP"] if "OPENSHIFT_PYTHON_IP" in os.environ else "localhost"
 server_port = int(os.environ["OPENSHIFT_PYTHON_PORT"]) if "OPENSHIFT_PYTHON_PORT" in os.environ else 10006
-host_name = os.environ["OPENSHIFT_GEAR_DNS"] if "OPENSHIFT_GEAR_DNS" in os.environ else "localhost"
+server_name = os.environ["OPENSHIFT_GEAR_DNS"] if "OPENSHIFT_GEAR_DNS" in os.environ else "localhost"
 
-application = PangeaApp(server_port)
+application = PangeaApp(server_port, server_name)
 server = HTTPServer(application)
 
-logger.debug("Running server on http://{0}:{1}".format(ip, server_port))
+logger.debug("Running server on http://{0}:{1}".format(server_name, server_port))
 
-server.listen(server_port, ip)
+server.listen(server_port, server_ip)
 IOLoop.instance().start()

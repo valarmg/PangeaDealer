@@ -20,7 +20,7 @@ class IndexHandler(RequestHandler):
         pass
 
     def get(self):
-        self.render("index.html", port=self.application.port, routes=self.application.get_routes())
+        self.render("index.html", host_name=self.application.host_name, port=self.application.port, routes=self.application.get_routes())
 
 
 class ApiHandler(RequestHandler):
