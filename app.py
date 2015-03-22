@@ -66,18 +66,16 @@ def setup_virtual_environment():
         except IOError:
             pass
 
+setup_virtual_environment()
 
-if __name__ == "__main__":
-    ip = os.environ["OPENSHIFT_PYTHON_IP"] if "OPENSHIFT_PYTHON_IP" in os.environ else "localhost"
-    server_port = int(os.environ["OPENSHIFT_PYTHON_PORT"]) if "OPENSHIFT_PYTHON_PORT" in os.environ else 10006
-    host_name = os.environ["OPENSHIFT_GEAR_DNS"] if "OPENSHIFT_GEAR_DNS" in os.environ else "localhost"
+ip = os.environ["OPENSHIFT_PYTHON_IP"] if "OPENSHIFT_PYTHON_IP" in os.environ else "localhost"
+server_port = int(os.environ["OPENSHIFT_PYTHON_PORT"]) if "OPENSHIFT_PYTHON_PORT" in os.environ else 10006
+host_name = os.environ["OPENSHIFT_GEAR_DNS"] if "OPENSHIFT_GEAR_DNS" in os.environ else "localhost"
 
-    setup_virtual_environment()
+application = PangeaApp(server_port)
+server = HTTPServer(application)
 
-    application = PangeaApp(server_port)
-    server = HTTPServer(application)
+logger.debug("Running server on http://{0}:{1}".format(ip, server_port))
 
-    logger.debug("Running server on http://{0}:{1}".format(ip, server_port))
-
-    server.listen(server_port, ip)
-    IOLoop.instance().start()
+server.listen(server_port, ip)
+IOLoop.instance().start()
