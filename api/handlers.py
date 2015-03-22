@@ -20,7 +20,12 @@ class IndexHandler(RequestHandler):
         pass
 
     def get(self):
-        self.render("index.html", port=self.application.port, routes=self.application.get_routes())
+        if self.application.port == 8080:
+            base_url = "http://{0}".format(self.application.host_name)
+        else:
+            base_url = "http://{0}:{1}".format(self.application.host_name, self.application.port)
+
+        self.render("index.html", base_url=base_url, routes=self.application.get_routes())
 
 
 class ApiHandler(RequestHandler):
@@ -124,11 +129,12 @@ class TableStatusHandler(ApiHandler):
 
 class PlayerHandler(ApiHandler):
 
-    def get(self, player_id):
+    def get(self, player_id=None, ):
         if player_id:
             response = self.player_service.get_player(player_id)
         else:
-            response = self.player_service.get_players()
+            table_id = self.get_query_argument("table_id", None, True)
+            response = self.player_service.get_players(table_id)
 
         self.send_pangea_response(response)
 

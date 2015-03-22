@@ -1,7 +1,5 @@
-from enum import Enum
 
-
-class PangaeaDealerErrorCodes(Enum):
+class PangaeaDealerErrorCodes():
     NA = 0
     InvalidArgumentError = 200
     NotFoundError = 201,
@@ -10,7 +8,7 @@ class PangaeaDealerErrorCodes(Enum):
 
 
 class PangeaException(Exception):
-    def __init__(self, error_code: PangaeaDealerErrorCodes, error_message):
+    def __init__(self, error_code, error_message):
         super().__init__(error_message)
         self.error_code = error_code
 

@@ -29,9 +29,9 @@ class PlayerService(PangeaDbServiceBase):
         logger.debug("get_players, table_id: {0}".format(table_id))
 
         if table_id:
-            documents = self.db.players_get_by_table_id(table_id)
+            documents = self.db.player_get_by_table_id(table_id)
         else:
-            documents = self.db.players_get_all()
+            documents = self.db.player_get_all()
 
         data = []
         for lobby in documents:

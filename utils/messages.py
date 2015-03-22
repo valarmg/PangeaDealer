@@ -1,5 +1,4 @@
 import json
-import jsonpickle
 import datetime
 import utils
 from utils.errors import PangaeaDealerErrorCodes
@@ -16,8 +15,6 @@ class PangeaMessage(object):
         return PangeaMessage(**data)
 
     def to_json(self):
-        #return json.dumps(self.__dict__, default=utils.json_date_handler)
-        #return jsonpickle.encode(self.__dict__)
         return json.dumps(self.__dict__, cls=PangeaJsonEncoder)
 
     def __str__(self):
@@ -32,5 +29,5 @@ class PangeaMessage(object):
         error_code = ex.error_code if hasattr(ex, "error_code") else PangaeaDealerErrorCodes.ServerError
 
         return PangeaMessage(message_type=str(message_type),
-                             error_code=error_code.value,
+                             error_code=error_code,
                              error_message=str(ex))
