@@ -1,14 +1,12 @@
 import json
 from utils import PangeaJsonEncoder
-from enum import Enum
-
 
 def remove_nulls(obj):
     # TODO: Probably need to check for nulls in any sub dictionaries?
     return dict((k, v) for k, v in obj.items() if v is not None)
 
 
-class Round(Enum):
+class Round():
     PreFlop = 1
     Flop = 2
     Turn = 3
