@@ -29,5 +29,5 @@ class PangeaMessage(object):
         error_code = ex.error_code if hasattr(ex, "error_code") else PangaeaDealerErrorCodes.ServerError
 
         return PangeaMessage(message_type=str(message_type),
-                             error_code=error_code.value,
+                             error_code=error_code,
                              error_message=str(ex))
