@@ -78,7 +78,7 @@ class TableService(PangeaDbServiceBase):
 
         data = []
         for table in tables:
-            data.append(models.Table.from_db(table))
+            data.append(Table.from_db(table))
 
         return PangeaMessage(tables=data)
 
