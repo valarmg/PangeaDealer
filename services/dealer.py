@@ -1,17 +1,17 @@
+from random import shuffle
 import logging
 from services import PangeaDbServiceBase
-
-logger = logging.getLogger(__name__)
+from models import Round
+import operator
+from models import Table
+from modules.dealer import DealerModule
+from modules.bet import BetModule
 
 
 class DealerService(PangeaDbServiceBase):
+    log = logging.getLogger(__name__)
+
     def __init__(self, db):
         super().__init__(db)
-
-    def deal_hand(self, table_id):
-        logging.debug("deal_hand, table_id: {0}".format(table_id))
-
-        table = self.db.table_get_by_id(table_id)
-
-        # TODO: Do deal?
-        # TODO: Update mechanism?
+        self.dealer_module = DealerModule(db)
+        self.bet_module = BetModule(db)

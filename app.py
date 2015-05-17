@@ -1,12 +1,15 @@
 import os
 import logging
+import traceback
 from tornado.options import parse_command_line
 from tornado.ioloop import IOLoop
 from tornado.wsgi import WSGIApplication
 from tornado.web import StaticFileHandler
 from tornado.httpserver import HTTPServer
 from api.handlers import *
-
+from tornado.ioloop import PeriodicCallback
+from db import PangeaDb
+from services.table import TableService
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -17,6 +20,10 @@ class PangeaApp(WSGIApplication):
     def __init__(self, port, host_name):
         self.port = port
         self.host_name = host_name
+
+        self.db = PangeaDb()
+        self.table_service = TableService(self.db)
+
         object_id_regex = "[0-9a-fA-F]{24}"
 
         if "OPENSHIFT_REPO_DIR" in os.environ:
@@ -38,7 +45,8 @@ class PangeaApp(WSGIApplication):
             (r"/api/players/({0})".format(object_id_regex), PlayerHandler),
             (r"/api/players$", PlayerHandler),
             (r"/api/seats$", SeatsHandler),
-            (r"/api/bets$", BetHandler)
+            (r"/api/bets$", BetHandler),
+            (r"/api/chats$", ChatHandler)
         ]
 
         settings = dict(
@@ -48,25 +56,28 @@ class PangeaApp(WSGIApplication):
         )
         WSGIApplication.__init__(self, handlers, **settings)
 
+        #callback = PeriodicCallback(self.kick_timed_out_players, 30000)
+        callback = PeriodicCallback(self.kick_timed_out_players, 5000)
+        callback.start()
+
+    def kick_timed_out_players(self):
+        self.table_service.kick_timed_out_players()
+
     def get_routes(self):
         return [handler.regex.pattern for handler in self.handlers[0][1] if handler.regex.pattern.startswith("/api")]
 
+if "OPENSHIFT_PYTHON_DIR" in os.environ:
+    virtenv = os.environ["OPENSHIFT_PYTHON_DIR"] + "/virtuenv/"
+    virtualenv = os.path.join(virtenv, 'bin/activate_this.py')
 
-def setup_virtual_environment():
-    if "OPENSHIFT_PYTHON_DIR" in os.environ:
-        virtenv = os.environ["OPENSHIFT_PYTHON_DIR"] + "/virtuenv/"
-        virtualenv = os.path.join(virtenv, 'bin/activate_this.py')
-
-        try:
-            exec_namespace = dict(__file__=virtualenv)
-            with open(virtualenv, 'rb') as exec_file:
-                file_contents = exec_file.read()
-            compiled_code = compile(file_contents, virtualenv, 'exec')
-            exec(compiled_code, exec_namespace)
-        except IOError:
-            pass
-
-setup_virtual_environment()
+    try:
+        exec_namespace = dict(__file__=virtualenv)
+        with open(virtualenv, 'rb') as exec_file:
+            file_contents = exec_file.read()
+        compiled_code = compile(file_contents, virtualenv, 'exec')
+        exec(compiled_code, exec_namespace)
+    except IOError:
+        pass
 
 server_ip = os.environ["OPENSHIFT_PYTHON_IP"] if "OPENSHIFT_PYTHON_IP" in os.environ else "localhost"
 server_port = int(os.environ["OPENSHIFT_PYTHON_PORT"]) if "OPENSHIFT_PYTHON_PORT" in os.environ else 10006
@@ -77,5 +88,10 @@ server = HTTPServer(application)
 
 logger.debug("Running server on http://{0}:{1}".format(server_name, server_port))
 
-server.listen(server_port, server_ip)
-IOLoop.instance().start()
+try:
+    server.listen(server_port, server_ip)
+    IOLoop.instance().start()
+except Exception:
+    logger.error(traceback.format_exc())
+    server.stop()
+

@@ -4,6 +4,7 @@ class PangaeaDealerErrorCodes():
     InvalidArgumentError = 200
     NotFoundError = 201,
     AlreadyExists = 202,
+    BettingError = 203,
     ServerError = 299
 
 

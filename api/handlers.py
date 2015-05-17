@@ -13,6 +13,7 @@ from services.dealer import DealerService
 from services.lobby import LobbyService
 from services.player import PlayerService
 from services.bet import BetService
+from services.chat import ChatService
 
 
 class IndexHandler(RequestHandler):
@@ -37,6 +38,8 @@ class ApiHandler(RequestHandler):
     lobby_service = None
     player_service = None
     bet_service = None
+    chat_service = None
+
     json_body = None
 
     def initialize(self):
@@ -46,6 +49,7 @@ class ApiHandler(RequestHandler):
         self.lobby_service = LobbyService(self.db)
         self.player_service = PlayerService(self.db)
         self.bet_service = BetService(self.db)
+        self.chat_service = ChatService(self.db)
 
     def prepare(self):
         if "Content-Type" in self.request.headers \
@@ -171,4 +175,15 @@ class BetHandler(ApiHandler):
         amount = self.get_json_body_argument("amount")
 
         response = self.table_service.bet(table_id, player_id, amount)
+        self.send_pangea_response(response)
+
+
+class ChatHandler(ApiHandler):
+
+    def post(self):
+        table_id = self.get_json_body_argument("table_id")
+        player_id = self.get_json_body_argument("player_id")
+        chat_message = self.get_json_body_argument("chat_message")
+
+        response = self.chat_service.chat(table_id, player_id, chat_message)
         self.send_pangea_response(response)
