@@ -1,6 +1,7 @@
 import logging
 import json
 import urllib
+import time
 from email.utils import parsedate
 from datetime import datetime
 
@@ -14,6 +15,7 @@ from services.lobby import LobbyService
 from services.player import PlayerService
 from services.bet import BetService
 from services.chat import ChatService
+from db.PangeaDb2 import PangeaDb2
 
 
 class IndexHandler(RequestHandler):
@@ -43,7 +45,8 @@ class ApiHandler(RequestHandler):
     json_body = None
 
     def initialize(self):
-        self.db = PangeaDb()
+        #self.db = PangeaDb()
+        self.db = PangeaDb2()
         self.dealer_service = DealerService(self.db)
         self.table_service = TableService(self.db)
         self.lobby_service = LobbyService(self.db)
@@ -84,8 +87,10 @@ class ApiHandler(RequestHandler):
     def if_modified_since(self):
         header = self.request.headers.get("If-Modified-Since")
         if header:
-            email_date = parsedate(header)
-            return datetime(*email_date[:6])
+            date_tuple = parsedate(header)
+            return datetime.fromtimestamp(time.mktime(date_tuple))
+            #email_date = parsedate(header)
+            #return datetime(*email_date[:6])
         return None
 
 
@@ -100,7 +105,14 @@ class LobbyHandler(ApiHandler):
 
     def post(self):
         name = self.get_json_body_argument("name")
+
         response = self.lobby_service.create_lobby(name)
+        self.send_pangea_response(response)
+
+    def delete(self,):
+        lobby_id = self.get_query_argument("lobby_id", None)
+
+        response = self.lobby_service.delete_lobby(lobby_id)
         self.send_pangea_response(response)
 
 
@@ -118,7 +130,15 @@ class TableHandler(ApiHandler):
     def post(self):
         lobby_id = self.get_json_body_argument("lobby_id")
         name = self.get_json_body_argument("name")
-        response = self.table_service.create_table(lobby_id, name)
+        use_default = self.get_json_body_argument("use_default", False)
+
+        response = self.table_service.create_table(lobby_id, name, use_default)
+        self.send_pangea_response(response)
+
+    def delete(self,):
+        table_id = self.get_query_argument("table_id", None)
+
+        response = self.table_service.delete_table(table_id)
         self.send_pangea_response(response)
 
 
@@ -173,8 +193,16 @@ class BetHandler(ApiHandler):
         table_id = self.get_json_body_argument("table_id")
         player_id = self.get_json_body_argument("player_id")
         amount = self.get_json_body_argument("amount")
+        check = self.get_json_body_argument("check")
+        fold = self.get_json_body_argument("fold")
 
-        response = self.table_service.bet(table_id, player_id, amount)
+        if check:
+            response = self.bet_service.check(table_id, player_id)
+        elif fold:
+            response = self.bet_service.fold(table_id, player_id)
+        else:
+            response = self.bet_service.bet(table_id, player_id, amount)
+
         self.send_pangea_response(response)
 
 

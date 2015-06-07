@@ -11,28 +11,31 @@ class BetModule(object):
 
     def check(self, table: Table, player: Player):
         player_seat = table.organised_seats.get_seat_by_player_id(player.id)
-        selected_player = table.get_player_seat()
+        selected_player = table.get_active_seat()
 
         if player_seat is None:
             raise PangeaException(PangaeaDealerErrorCodes.BettingError, "Player is not sitting on the table")
         if selected_player is None or player_seat.seat_number != selected_player.seat_number():
-            raise PangeaException(PangaeaDealerErrorCodes.BettingError, "Not the players turn")
+            raise PangeaException(PangaeaDealerErrorCodes.BettingError, "Cannot check out of turn")
+        if table.has_turn_expired():
+            raise PangeaException(PangaeaDealerErrorCodes.BettingError, "The players turn has expired")
 
         self.validate_bet(table, player_seat.get_bet(), False)
 
-        # Do bet
         self.db.chat_create(ChatMessage.PLAYER_CHECK.format(player.username), table.id)
         self.db.event_create(TableEvent.PLAYER_CHECK.format(player.username), table.id,
                              player_seat.seat_number, player.username)
 
     def bet(self, table: Table, player: Player, bet, is_raise):
         player_seat = table.organised_seats.get_seat_by_player_id(player.id)
-        selected_player = table.get_player_seat()
+        active_player_seat = table.get_active_seat()
 
         if player_seat is None:
             raise PangeaException(PangaeaDealerErrorCodes.BettingError, "Player is not sitting on the table")
-        if selected_player is None or player_seat.seat_number != selected_player.seat_number():
-            raise PangeaException(PangaeaDealerErrorCodes.BettingError, "Not the players turn")
+        if active_player_seat is None or player_seat.seat_number != active_player_seat.seat_number:
+            raise PangeaException(PangaeaDealerErrorCodes.BettingError, "Cannot bet out of turn")
+        if table.has_turn_expired():
+            raise PangeaException(PangaeaDealerErrorCodes.BettingError, "The players turn has expired")
 
         try:
             total_bet = player_seat.get_bet() + int(bet)
@@ -41,8 +44,10 @@ class BetModule(object):
 
         self.validate_bet(table, total_bet, is_raise)
 
-        # Do bet
-        self.db.bet(table.id, player.id, total_bet)
+        table.current_bet = total_bet
+        player_seat.bet = total_bet
+        self.db.table_bet(table.id, player_seat.seat_number, total_bet)
+
         self.db.chat_create(ChatMessage.PLAYER_BET.format(player.username), table.id)
         self.db.event_create(TableEvent.PLAYER_BET.format(player.username, bet), table.id,
                              player_seat.seat_number, player.username, bet=bet)
@@ -54,12 +59,14 @@ class BetModule(object):
 
     def fold(self, table: Table, player: Player):
         player_seat = table.organised_seats.get_seat_by_player_id(player.id)
-        selected_player = table.get_player_seat()
+        selected_player = table.get_active_seat()
 
         if player_seat is None:
             raise PangeaException(PangaeaDealerErrorCodes.BettingError, "Player is not sitting on the table")
         if selected_player is None or player_seat.seat_number != selected_player.seat_number():
-            raise PangeaException(PangaeaDealerErrorCodes.BettingError, "Not the players turn")
+            raise PangeaException(PangaeaDealerErrorCodes.BettingError, "Cannot fold out of turn")
+        if table.has_turn_expired():
+            raise PangeaException(PangaeaDealerErrorCodes.BettingError, "The players turn has expired")
 
         self.db.fold(table.id, player.id)
         self.db.chat_create(ChatMessage.PLAYER_FOLD.format(player.player_name), table.id)

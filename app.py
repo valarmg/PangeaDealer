@@ -10,6 +10,7 @@ from api.handlers import *
 from tornado.ioloop import PeriodicCallback
 from db import PangeaDb
 from services.table import TableService
+from db.PangeaDb2 import PangeaDb2
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -21,7 +22,8 @@ class PangeaApp(WSGIApplication):
         self.port = port
         self.host_name = host_name
 
-        self.db = PangeaDb()
+        #self.db = PangeaDb()
+        self.db = PangeaDb2()
         self.table_service = TableService(self.db)
 
         object_id_regex = "[0-9a-fA-F]{24}"

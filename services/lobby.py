@@ -3,6 +3,7 @@ from services import PangeaDbServiceBase
 from utils.messages import PangeaMessage
 from utils.errors import PangeaException, PangaeaDealerErrorCodes
 import models
+from db.PangeaDb2 import PangeaDb2
 
 
 class LobbyService(PangeaDbServiceBase):
@@ -16,8 +17,8 @@ class LobbyService(PangeaDbServiceBase):
 
         if name is None or name.isspace():
             raise PangeaException.missing_field("name")
+        lobby = self.db.lobby.create(name)
 
-        lobby = self.db.lobby_create(name)
         return PangeaMessage(lobby=lobby)
 
     def get_lobbies(self):
@@ -36,9 +37,7 @@ class LobbyService(PangeaDbServiceBase):
     def delete_lobby(self, lobby_id):
         self.log.debug("delete_lobby: {0}".format(lobby_id))
 
-        self.db.lobby_delete(lobby_id)
-
-    def delete_lobbies(self):
-        self.log.debug("delete_lobbies")
-
-        self.db.lobby_delete_all()
+        if lobby_id:
+            self.db.lobby.delete(lobby_id)
+        else:
+            self.db.lobby.delete_all()

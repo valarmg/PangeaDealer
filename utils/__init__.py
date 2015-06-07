@@ -4,6 +4,10 @@ from json import JSONEncoder
 from bson import ObjectId
 
 
+def as_object_id(value):
+    return None if value is None else ObjectId(str(value))
+
+
 class PangeaJsonEncoder(JSONEncoder):
     def default(self, obj):
         if isinstance(obj, ObjectId):

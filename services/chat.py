@@ -2,6 +2,7 @@ import logging
 from services import PangeaDbServiceBase
 from utils.messages import PangeaMessage
 from utils.errors import PangeaException, PangaeaDealerErrorCodes
+from db.PangeaDb2 import PangeaDb2
 
 
 class ChatService(PangeaDbServiceBase):

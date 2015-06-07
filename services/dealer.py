@@ -6,6 +6,7 @@ import operator
 from models import Table
 from modules.dealer import DealerModule
 from modules.bet import BetModule
+from db.PangeaDb2 import PangeaDb2
 
 
 class DealerService(PangeaDbServiceBase):

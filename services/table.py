@@ -5,6 +5,8 @@ from services import PangeaDbServiceBase
 from models import *
 from utils.errors import PangeaException, PangaeaDealerErrorCodes
 from modules.dealer import DealerModule
+from db.PangeaDb2 import PangeaDb2
+from modules import DealerModule2
 
 logger = logging.getLogger(__name__)
 
@@ -12,11 +14,24 @@ logger = logging.getLogger(__name__)
 class TableService(PangeaDbServiceBase):
     def __init__(self, db):
         super().__init__(db)
-        self.dealer_module = DealerModule(db)
+        self.dealer_module = DealerModule2(db)
 
-    def create_table(self, lobby_id, name):
-        logger.debug("create_table, lobby_id: {0}, name: {1}".format(lobby_id, name))
-        table = self.db.table_create(lobby_id, name)
+    def create_table(self, lobby_id, name, use_default):
+        logger.debug("create_table, lobby_id: {0}, name: {1}, use_default: {2}".format(lobby_id, name, use_default))
+
+        if use_default:
+            table = self.db.table.get_default()
+            if not table:
+                logger.debug("Default table does not exist, creating automatically")
+                lobby = self.db.lobby.get_default()
+                if not lobby:
+                    logger.debug("Default lobby does not exist, creating automatically")
+                    lobby = self.db.lobby.create("Default Lobby", True)
+
+                table = self.db.table.create(lobby.id, "Default Table", True)
+        else:
+            table = self.db.table.create(lobby_id, name)
+
         return PangeaMessage(table=table)
 
     def join_table(self, table_id, player_id, seat_number, stack):
@@ -30,21 +45,11 @@ class TableService(PangeaDbServiceBase):
         if not seat_number:
             raise PangeaException.missing_field("seat_number")
 
-        player = self.db.player_get_by_id(player_id)
+        player = self.db.player.get_by_id(player_id)
+        table = self.db.table.get_by_id(table_id)
 
-        table = self.db.table_get_by_id(table_id)
-        exists = table.seats and any(x.seat_number == seat_number for x in table.seats)
-        if exists:
-            raise PangeaException(PangaeaDealerErrorCodes.AlreadyExists, "Seat was been taken by another player")
-
-        playing = True if table.current_round == Round.NA else False
-        self.db.player_join_table(table_id, player_id, player.username, seat_number, stack, playing)
-
-        message = ChatMessage.PLAYER_TABLE_JOIN.format(player.username)
-        self.db.chat_create(message, table_id)
-        self.db.event_create(TableEvent.PLAYER_JOIN_TABLE, table_id, seat_number, player.username)
-
-        self.dealer_module.continue_hand(table)
+        self.dealer_module.join_table(table, player, seat_number, stack)
+        self.db.table.update(table)
 
         return PangeaMessage()
 
@@ -56,21 +61,11 @@ class TableService(PangeaDbServiceBase):
         if not player_id:
             raise PangeaException.missing_field("player_id")
 
-        table = self.db.table_get_by_id(table_id)
-        player = self.db.player_get_by_id(player_id)
-        self.db.player_leave_table(table_id, player_id)
+        table = self.db.table.get_by_id(table_id)
+        player = self.db.player.get_by_id(player_id)
 
-        player_seat_number = ""
-        for seat in table.seats:
-            if seat.player_id == player_id:
-                player_seat_number = seat.seat_number
-                break
-
-        message = ChatMessage.PLAYER_TABLE_LEAVE.format(player.username)
-        self.db.chat_create(message, table_id)
-        self.db.event_create(TableEvent.PLAYER_LEAVE_TABLE, table_id, player_seat_number, player.username)
-
-        self.dealer_module.continue_hand(table)
+        self.dealer_module.leave_table(table, player)
+        self.db.table.update(table)
 
         return PangeaMessage()
 
@@ -108,21 +103,31 @@ class TableService(PangeaDbServiceBase):
         # TODO: and no chats have been sent
 
         # TODO: Only your own cards should be returned. The deck should not be returned, or any other player's cards
-        table = self.db.table_get_by_id(table_id)
+        table = self.db.table.get_by_id(table_id)
 
         events = None
+        chats = None
         if last_check:
-            # Only return
-            events = self.db.event_get_by_table_id(table_id, last_check)
-
-        chats = self.db.chat_get_by_table_id(table_id, last_check)
+            # Only new events/chats
+            events = self.db.event.get_by_table_id(table_id, last_check)
+            chats = self.db.chat.get_by_table_id(table_id, last_check)
 
         return PangeaMessage(table=table, events=events, chats=chats)
 
-    def kick_timed_out_players(self):
-        logger.debug("kick_timed_out_players")
+    def delete_table(self, table_id):
+        logger.debug("kick_timed_out_players, table_id: {0}", table_id)
 
-        tables = self.db.table_get_all()
+        if table_id:
+            self.db.table.delete(table_id)
+        else:
+            self.db.table.delete_all()
+
+        return PangeaMessage()
+
+    def kick_timed_out_players(self):
+        #logger.debug("kick_timed_out_players")
+
+        tables = self.db.table.get_all_with_timer()
         for table in tables:
-            self.dealer_module.kick_timed_out_players(table)
-            self.dealer_module.continue_hand(table)
+            if self.dealer_module.kick_timed_out_players(table):
+                self.db.table.update(table)

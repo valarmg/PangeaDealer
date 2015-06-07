@@ -3,6 +3,8 @@ from services import PangeaDbServiceBase
 from utils.messages import PangeaMessage
 from utils.errors import PangeaException, PangaeaDealerErrorCodes
 import models
+from db.PangeaDb2 import PangeaDb2
+
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +19,7 @@ class PlayerService(PangeaDbServiceBase):
         if username is None or username.isspace():
             raise PangeaException.missing_field("username")
 
-        player = self.db.player_create(username)
+        player = self.db.player.create(username)
         return PangeaMessage(player=player)
 
     def get_players(self, table_id):
@@ -30,14 +32,12 @@ class PlayerService(PangeaDbServiceBase):
 
         return PangeaMessage(players=players)
 
-    def get_player(self, player_id=None, username=None):
-        logger.debug("get_player, player_id: {0}, username: {1}".format(player_id, username))
+    def get_player(self, player_id):
+        logger.debug("get_player, player_id: {0}".format(player_id))
 
         if player_id:
             player = self.db.player_get_by_id(player_id)
-        elif username:
-            player = self.db.player_get_by_username(username)
         else:
-            raise PangeaException.missing_field("player_id|username")
+            raise PangeaException.missing_field("player_id")
 
         return PangeaMessage(player=player)

@@ -1,7 +1,7 @@
 import json
 from utils import PangeaJsonEncoder
-import operator
-
+import datetime
+import utils
 
 def remove_nulls(obj):
     # TODO: Probably need to check for nulls in any sub dictionaries?
@@ -23,6 +23,15 @@ class ModelBase(object):
 
     def to_dict(self):
         return {"id": self.id}
+
+    def to_document(self):
+        doc = self.to_dict()
+
+        if "id" in doc:
+            doc["_id"] = utils.as_object_id(doc["id"])
+            del doc["id"]
+
+        return doc
 
     def from_dict(self, data):
         for key in data:
@@ -46,27 +55,32 @@ class Lobby(ModelBase):
     def __init__(self):
         super().__init__()
         self.name = None
+        self.default = None
         self.tables = []
 
     def from_db(self, document):
         super().from_db(document)
         self.name = document.get("name")
+        self.default = None
         self.tables = document.get("tables")
         return self
 
     def to_dict(self):
-        result = {"id": self.id, "name": self.name}
+        result = {"id": self.id, "name": self.name, "default": self.default}
         return remove_nulls(result)
 
 
 class Table(ModelBase):
+    TURN_DURATION_IN_SECONDS = 30
+    DEFAULT_BIG_BLIND = 20
+    DEFAULT_SMALL_BLIND = 10
 
     def __init__(self):
         super().__init__()
         self.name = None
         self.seats = []
         self.dealer_seat_number = None
-        self.player_seat_number = None
+        self.active_seat_number = None
         self.current_round = None
         self.board_cards = None
         self.deck_cards = None
@@ -77,13 +91,15 @@ class Table(ModelBase):
         self.current_bet = None
         self.dealing_to_seat_number = None
         self.pot = None
+        self.updated_on = None
+        self.default = None
 
     def from_db(self, document):
         super().from_db(document)
 
         self.name = document.get("name")
         self.dealer_seat_number = document.get("dealer_seat_number")
-        self.player_seat_number = document.get("player_seat_number")
+        self.active_seat_number = document.get("active_seat_number")
         self.current_round = document.get("current_round")
         self.board_cards = document.get("board_cards")
         self.deck_cards = document.get("deck_cards")
@@ -93,6 +109,8 @@ class Table(ModelBase):
         self.current_bet = document.get("current_bet")
         self.dealing_to_seat_number = document.get("dealing_to_seat_number")
         self.pot = document.get("Pot")
+        self.updated_on = document.get("updated_on")
+        self.default = document.get("default")
 
         self.seats = []
         seat_documents = document.get("seats", list())
@@ -104,23 +122,33 @@ class Table(ModelBase):
         return self
 
     def to_dict(self):
+
+        # The deck cards are never included in the json response
         result = {
             "id": self.id,
             "name": self.name,
             "dealer_seat_number": self.dealer_seat_number,
-            "player_seat_number": self.player_seat_number,
+            "active_seat_number": self.active_seat_number,
             "current_round": self.current_round,
             "turn_time_start": self.turn_time_start,
             "seats": [x.to_dict() for x in self.seats],
             "board_cards": self.board_cards,
-            "deck_cards": self.deck_cards,
             "small_blind": self.small_blind,
             "big_blind": self.big_blind,
             "current_bet": self.current_bet,
             "dealing_to_seat_number": self.dealing_to_seat_number,
-            "pot": self.pot
+            "pot": self.pot,
+            "updated_on": self.updated_on,
+            "default": self.default,
         }
+
         return remove_nulls(result)
+
+    def to_document(self):
+        # The decks cards aren't included in the json response but still need to be saved to the database
+        doc = super().to_document()
+        doc["deck_cards"] = self.deck_cards
+        return doc
 
     def get_dealer_seat(self, playing_only=True):
         if self.dealer_seat_number is None:
@@ -140,10 +168,10 @@ class Table(ModelBase):
             return None
         return self.organised_seats.get_next_seat(small_blind_seat.seat_number)
 
-    def get_player_seat(self):
-        if self.player_seat_number is None:
+    def get_active_seat(self):
+        if self.active_seat_number is None:
             return None
-        return self.organised_seats.get_seat(self.dealer_seat_number)
+        return self.organised_seats.get_seat(self.active_seat_number)
 
     def get_dealing_to_seat(self):
         if self.dealing_to_seat_number is None:
@@ -162,9 +190,48 @@ class Table(ModelBase):
     def get_pot(self):
         return int(self.pot) if self.pot else 0
 
+    def get_current_round(self):
+        if self.current_round:
+            return int(self.current_round)
+        return Round.NA
+
     def get_seat_numbers(self):
         for seat in self.seats:
             yield seat.seat_number
+
+    def has_turn_expired(self):
+        turn_expiry = self.calculate_turn_expiry()
+        if turn_expiry:
+            return datetime.datetime.utcnow() >= turn_expiry
+        return True
+
+    def calculate_turn_expiry(self):
+        if self.turn_time_start:
+            return self.turn_time_start + datetime.timedelta(0, self.TURN_DURATION_IN_SECONDS)
+        return None
+
+    def add_seat(self, seat):
+        self.seats.append(seat)
+        self.organised_seats = OrganisedSeats(self.seats)
+
+    def remove_seat(self, seat):
+        self.seats.remove(seat)
+        self.organised_seats = OrganisedSeats(self.seats)
+
+    def end_hand(self):
+        self.active_seat_number = None
+        self.current_round = Round.NA
+        self.turn_time_start = None
+        self.board_cards = []
+        self.deck_cards = None
+        self.current_bet = None
+        self.dealing_to_seat_number = None
+        self.pot = 0
+
+        for seat in self.seats:
+            seat.playing = True
+            seat.hole_cards = []
+            seat.bet = 0
 
 
 class Player(ModelBase):
@@ -188,15 +255,16 @@ class Player(ModelBase):
 
 class Seat(ModelBase):
 
-    def __init__(self):
+    def __init__(self, player_id=None, seat_number=None, username=None,
+                 stack=None, hole_cards=None, bet=None, playing=None):
         super().__init__()
-        self.player_id = None
-        self.seat_number = None
-        self.username = None
-        self.stack = None
-        self.hole_cards = []
-        self.bet = None
-        self.playing = None
+        self.player_id = utils.as_object_id(player_id)
+        self.seat_number = seat_number
+        self.username = username
+        self.stack = stack
+        self.hole_cards = hole_cards
+        self.bet = bet
+        self.playing = playing
 
     def from_db(self, document):
         super().from_db(document)
@@ -227,12 +295,18 @@ class Seat(ModelBase):
 
 
 class ChatMessage(ModelBase):
-    PLAYER_TABLE_JOIN = "Player {0} has joined the table"
-    PLAYER_TABLE_LEAVE = "Player {0} has left the table"
-    PLAYER_BET = "Player {0} has bet {1}"
-    PLAYER_CHECK = "Player {0} has checked"
-    PLAYER_FOLD = "Player {0} has folded"
-    PLAYER_TIMEOUT = "Player {0} has timed out"
+    PLAYER_TABLE_JOIN = "{0} has joined the table"
+    PLAYER_TABLE_LEAVE = "{0} has left the table"
+    PLAYER_BET = "{0} has bet {1}"
+    PLAYER_CHECK = "{0} has checked"
+    PLAYER_FOLD = "{0} has folded"
+    PLAYER_TIMEOUT = "{0} has timed out"
+    PLAYER_CALL = "{0} has called"
+    DEAL_PREFLOP = "Dealing preflop"
+    DEAL_FLOP = "Dealing flop"
+    DEAL_TURN = "Dealing turn"
+    DEAL_RIVER = "Dealing river"
+    DEAL_END = "Ending game"
 
     def __init__(self, message=None, player_name=None):
         super().__init__()
@@ -260,6 +334,10 @@ class TableEvent(ModelBase):
     PLAYER_BET = "player_bet"
     PLAYER_CHECK = "player_check"
     PLAYER_FOLD = "player_fold"
+    PLAYER_CALL = "player_call"
+    PLAYER_RAISE = "player_call"
+    HAND_COMPLETE = "hand_complete"
+
 
     def __init__(self):
         super().__init__()
@@ -314,11 +392,11 @@ class Bet(ModelBase):
 class OrganisedSeats(object):
     def __init__(self, seats):
         self.seats = sorted(seats, key=lambda x: x.seat_number)
-        self.seat_numbers = []
 
-        for seat in self.seats:
-            if seat.seat_number:
-                self.seat_numbers.append(int(seat.seat_number))
+        # self.seat_numbers = []
+        # for seat in self.seats:
+        #    if seat.seat_number:
+        #       self.seat_numbers.append(int(seat.seat_number))
 
     def get_first_seat(self, playing_only=True):
         seats = self.get_playing_seats() if playing_only else self.seats
@@ -332,7 +410,22 @@ class OrganisedSeats(object):
 
         for i in range(len(seats)):
             if seats[i].seat_number == seat_number:
-                if len(seats) >= (i + 1):
+                if len(seats) > (i + 1):
+                    return seats[i+1]
+                else:
+                    return seats[0]
+        return None
+
+    def get_previous_seat(self, seat_number, playing_only=True):
+        seats = self.get_playing_seats() if playing_only else self.seats
+
+        # Reverse the ordering of seats so we can use exactly the same
+        # logic to we use to find the next seat to find the previous one
+        seats = list(reversed(seats))
+
+        for i in range(len(seats)):
+            if seats[i].seat_number == seat_number:
+                if len(seats) > (i + 1):
                     return seats[i+1]
                 else:
                     return seats[0]

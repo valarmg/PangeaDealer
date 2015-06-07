@@ -127,7 +127,7 @@ class PangeaDb(object):
     def table_set_player_seat(self, table_id, seat_number):
         table_id = as_objectid(table_id)
         self.db.table.update({"_id": table_id},
-                             {"set": {"updated_on": datetime.utcnow(), "player_seat_number": seat_number}})
+                             {"set": {"updated_on": datetime.utcnow(), "active_seat_number": seat_number}})
 
     def table_set_dealing_to_seat(self, table_id, seat_number):
         table_id = as_objectid(table_id)
@@ -183,7 +183,7 @@ class PangeaDb(object):
     def table_end_hand(self, table_id):
         table_id = as_objectid(table_id)
         self.db.table.update({"_id": table_id}, {"$set": {
-            "player_seat_number": None,
+            "active_seat_number": None,
             "current_round": Round.NA,
             "turn_time_start": None,
             "board_card": [],
@@ -200,6 +200,14 @@ class PangeaDb(object):
             self.db.table.update({"_id": table_id, "seats.seat_number": seat_number},
                                  {"$set": {"seats.$.playing": True, "seats.$.hole_cards": None, "seats.$.bet": None}},
                                  upsert=True)
+
+    def table_bet(self, table_id, seat_number, bet):
+        table_id = as_objectid(table_id)
+
+        self.db.table.update({"_id": table_id, "seats.seat_number": seat_number},
+                             {"$set": {"seats.$.bet": bet, "updated_on": datetime.utcnow()}})
+        self.db.table.update({"_id": table_id}, {"$set": {"current_bet": bet, "updated_on": datetime.utcnow()}})
+
 
     # --  Player -- #
     def player_create(self, username):
@@ -378,9 +386,3 @@ class PangeaDb(object):
         for document in results:
             chats.append(ChatMessage().from_db(document))
         return chats
-
-    # -- Bet -- #
-    def bet_create(self, table_id, player_id, amount):
-        bet = {"table_id": table_id, "player_id": player_id, "amount": amount}
-        self.db.bet.insert(bet)
-        return Bet().from_dict(bet)
