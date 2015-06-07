@@ -1,4 +1,3 @@
-from seat import PangeaSeat
 from operator import itemgetter
 
 class PangeaPot:

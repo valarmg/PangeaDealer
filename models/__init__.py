@@ -71,7 +71,7 @@ class Lobby(ModelBase):
 
 
 class Table(ModelBase):
-    TURN_DURATION_IN_SECONDS = 30
+    TURN_DURATION_IN_SECONDS = 10
     DEFAULT_BIG_BLIND = 20
     DEFAULT_SMALL_BLIND = 10
 

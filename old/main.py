@@ -1,8 +1,6 @@
-from lobby.lobby import PangeaLobby
-from table.table import PangeaTable
-from seat import PangeaSeat
-from deal.dealing import PangeaDeal
-from deuces.card import Card
+from old.lobby import PangeaLobby
+from old.dealing import PangeaDeal
+
 
 def play_one_hand():
     Lobby = PangeaLobby()

@@ -1,8 +1,7 @@
 from random import randint
-from pangeabetting import PangeaBetting
-from pot import PangeaPot
-from seat import PangeaSeat
-from handhistory import HandHistory
+
+from old.seat import PangeaSeat
+from old.handhistory import HandHistory
 
 
 class PangeaTable:

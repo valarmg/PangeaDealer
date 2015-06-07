@@ -3,73 +3,55 @@ import logging
 from pymongo import MongoClient
 from bson import ObjectId
 from utils.errors import PangeaException, PangaeaDealerErrorCodes
-from datetime import datetime
 from models import *
-
-
-def as_objectid(value):
-    return None if value is None else ObjectId(str(value))
-
-
-def get_id(obj):
-    value = None
-    if obj is None:
-        value = None
-    elif hasattr(obj, "id"):
-        value = obj.id
-    elif "id" in obj:
-        value = obj["id"]
-    elif "_id" in obj:
-        value = obj["_id"]
-    return as_objectid(value)
+import utils
 
 
 class PangeaDb(object):
     def __init__(self):
-        self.logger = logging.getLogger(__name__)
+        self.log = logging.getLogger(__name__)
 
         if "OPENSHIFT_MONGODB_DB_URL" in os.environ:
             self.client = MongoClient(os.environ["OPENSHIFT_MONGODB_DB_URL"])
+            self.log.debug("Created connection to Open Shift database")
         else:
             self.client = MongoClient("localhost", 27017)
+            self.log.debug("Created connection to local database")
 
-        self.db = self.client.pangea
-        self.logger.debug("Opened connection to database")
+        self.lobby = LobbyRepo(self.client)
+        self.table = TableRepo(self.client)
+        self.player = PlayerRepo(self.client)
+        self.event = EventRepo(self.client)
+        self.chat = ChatRepo(self.client)
 
-    # -- Lobby -- #
-    def lobby_create(self, name):
-        lobby = {
-            "name": name,
-            "updated_on": datetime.utcnow()
-        }
+
+class LobbyRepo(object):
+    def __init__(self, client):
+        self.db = client.pangea
+
+    def create(self, name, default=False):
+        lobby = {"name": name, "default": default}
         self.db.lobby.insert(lobby)
 
         return Lobby().from_dict(lobby)
 
-    def lobby_update(self, lobby_id, name):
-        lobby_id = as_objectid(lobby_id)
-        lobby = {
-            "_id": lobby_id,
-            "name": name,
-            "updated_on": datetime.utcnow()
-        }
+    def update(self, lobby: Lobby):
+        self.db.lobby.update({"_id": utils.as_object_id(lobby.id)}, lobby.to_document())
 
-        self.db.lobby.update({"_id": lobby_id}, lobby)
-
-    def lobby_delete(self, lobby_id):
-        lobby_id = as_objectid(lobby_id)
+    def delete(self, lobby_id):
+        lobby_id = utils.as_object_id(lobby_id)
         self.db.lobby.remove({"_id": lobby_id})
 
-    def lobby_delete_all(self):
+    def delete_all(self):
         self.db.lobby.remove({})
 
-    def lobby_get_by_id(self, lobby_id):
-        lobby = self.db.lobby.find_one({"_id": as_objectid(lobby_id)})
+    def get_by_id(self, lobby_id):
+        lobby = self.db.lobby.find_one({"_id": utils.as_object_id(lobby_id)})
         if lobby is None:
             raise PangeaException(PangaeaDealerErrorCodes.NotFoundError, "Lobby not found")
         return Lobby.from_db(lobby)
 
-    def lobby_get_all(self):
+    def get_all(self):
         results = list(self.db.lobby.find())
 
         lobbies = []
@@ -77,197 +59,139 @@ class PangeaDb(object):
             lobbies.append(Lobby().from_db(document))
         return lobbies
 
-    # -- Table -- #
-    def table_create(self, lobby_id, name):
-        lobby_id = as_objectid(lobby_id)
+    def get_default(self):
+        lobby = self.db.lobby.find_one({"default": True})
+        if lobby:
+            return Lobby().from_db(lobby)
+        return None
+
+
+class TableRepo(object):
+    def __init__(self, client):
+        self.db = client.pangea
+
+    def create(self, lobby_id, name, default=False):
+        lobby_id = utils.as_object_id(lobby_id)
 
         table = {
             "lobby_id": lobby_id,
             "name": name,
-            "updated_on": datetime.utcnow()
+            "default": default,
+            "updated_on": datetime.datetime.utcnow(),
+            "big_blind": Table.DEFAULT_BIG_BLIND,
+            "small_blind": Table.DEFAULT_SMALL_BLIND
         }
 
         table_id = self.db.table.insert(table)
         self.db.lobby.update({"_id": lobby_id}, {"$push": {"tables": table_id}})
+
         return Table().from_dict(table)
 
-    def table_update(self, table_id, name):
-        table_id = as_objectid(table_id)
+    def update(self, table):
+        table.updated_on = datetime.datetime.utcnow()
+        doc = table.to_document()
+        self.db.table.update({"_id": utils.as_object_id(table.id)}, doc)
 
-        table = {
-            "_id": table_id,
-            "name": name,
-            "updated_on": datetime.utcnow()
-        }
-
-        self.db.table.update(table)
-
-    def table_remove(self, table_id):
-        table_id = as_objectid(table_id)
-        table = self.db.table.find_one({"_id": table_id})
-
-        if table is not None:
-            self.db.lobby.update({"_id": table.lobby_id}, {"pull": {"tables": table_id}})
-            self.db.lobby.update({"_id": table.lobby_id}, {"set": {"updated_on": datetime.utcnow()}})
-            self.db.table.remove({"_id": table_id})
-            self.db.event.remove({"table_id", table_id})
-
-    def table_get_by_id(self, table_id):
-        table = self.db.table.find_one({"_id": as_objectid(table_id)})
+    def get_by_id(self, table_id):
+        table = self.db.table.find_one({"_id": utils.as_object_id(table_id)})
 
         if table is None:
             raise PangeaException(PangaeaDealerErrorCodes.NotFoundError, "Table not found")
         return Table().from_db(table)
 
-    def table_set_dealer_seat(self, table_id, seat_number):
-        table_id = as_objectid(table_id)
-        self.db.table.update({"_id": table_id},
-                             {"set": {"updated_on": datetime.utcnow(), "dealer_seat_number": seat_number}})
-
-    def table_set_player_seat(self, table_id, seat_number):
-        table_id = as_objectid(table_id)
-        self.db.table.update({"_id": table_id},
-                             {"set": {"updated_on": datetime.utcnow(), "active_seat_number": seat_number}})
-
-    def table_set_dealing_to_seat(self, table_id, seat_number):
-        table_id = as_objectid(table_id)
-        self.db.table.update({"_id": table_id},
-                             {"set": {"updated_on": datetime.utcnow(), "dealing_to_seat_number": seat_number}})
-
-    def table_set_turn_time_start(self, table_id, start_time):
-        table_id = as_objectid(table_id)
-        self.db.table.update({"_id": table_id},
-                             {"set": {"updated_on": datetime.utcnow(), "turn_time_start": start_time}})
-        return start_time
-
-    def table_deal_hole_cards(self, table_id, seat_number, cards):
-        table_id = as_objectid(table_id)
-        self.db.table.update({"_id": table_id, "seats.seat_number": seat_number},
-                             {"set": {"seats.hole_cards": cards}})
-        self.table_set_updated(table_id)
-
-    def table_deal_board_cards(self, table_id, cards):
-        table_id = as_objectid(table_id)
-        self.db.table.update({"_id"}, table_id, {"set": {"board_cards": cards}})
-        self.table_set_updated(table_id)
-
-    def table_set_current_round(self, table_id, current_round):
-        table_id = as_objectid(table_id)
-        self.db.table.update({"_id"}, table_id, {"set": {"current_round": current_round}})
-        self.table_set_updated(table_id)
-
-    def table_get_by_lobby_id(self, lobby_id):
-        results = list(self.db.table.find({"lobby_id": as_objectid(lobby_id)}))
+    def get_all(self):
+        results = list(self.db.table.find())
 
         tables = []
         for document in results:
             tables.append(Table().from_db(document))
         return tables
 
-    def table_get_all(self):
-        results = list(self.db.table.find({}))
+    def get_all_with_timer(self):
+        results = list(self.db.table.find({"turn_time_start": {"$ne": None}}))
 
         tables = []
         for document in results:
             tables.append(Table().from_db(document))
         return tables
 
-    def table_set_updated(self, table_id):
-        table_id = as_objectid(table_id)
-        self.db.table.update({"_id": table_id}, {"$set": {"updated_on": datetime.utcnow()}})
+    def get_default(self):
+        table = self.db.table.find_one({"default": True})
+        if table:
+            return Table().from_db(table)
+        return None
 
-    def table_set_deck(self, table_id, deck):
-        table_id = as_objectid(table_id)
-        self.db.table.update({"_id": table_id}, {"$set": {"deck_cards": deck}})
+    def has_seat_timed_out(self, table: Table, seat_number):
+        # Must do a database call to ensure the timeout hasn't occurred since the table data was retrieved from database
+        # The seat is considered timed out if the seat has changed or the turn timer started less than 10 seconds ago
 
-    def table_end_hand(self, table_id):
-        table_id = as_objectid(table_id)
-        self.db.table.update({"_id": table_id}, {"$set": {
-            "active_seat_number": None,
-            "current_round": Round.NA,
-            "turn_time_start": None,
-            "board_card": [],
-            "deck_cards": [],
-            "current_bet": None,
-            "dealing_to_seat_number": None,
-            "pot": 0,
-            "updated_on": datetime.utcnow(),
-        }})
+        max_start_time = datetime.datetime.utcnow() - datetime.timedelta(0, table.TURN_DURATION_IN_SECONDS)
+        # * Not timed out example *
+        # Current time: 10:40:00
+        # Max start time: 10:10:00
+        # Turn time start: 10:20:00
 
-    def table_reset_seats(self, table_id, seat_numbers):
-        table_id = as_objectid(table_id)
-        for seat_number in seat_numbers:
-            self.db.table.update({"_id": table_id, "seats.seat_number": seat_number},
-                                 {"$set": {"seats.$.playing": True, "seats.$.hole_cards": None, "seats.$.bet": None}},
-                                 upsert=True)
+        # * Timed out example *
+        # Current time: 10:40:00
+        # Max start time: 10:10:00
+        # Turn time start: 10:00:00
 
-    def table_bet(self, table_id, seat_number, bet):
-        table_id = as_objectid(table_id)
+        result = self.db.table.find({"_id": utils.as_object_id(table.id), "current_seat_number": seat_number,
+                                     "turn_time_start": {"$gt": max_start_time}}, {"_id": 1}).limit(1)
 
-        self.db.table.update({"_id": table_id, "seats.seat_number": seat_number},
-                             {"$set": {"seats.$.bet": bet, "updated_on": datetime.utcnow()}})
-        self.db.table.update({"_id": table_id}, {"$set": {"current_bet": bet, "updated_on": datetime.utcnow()}})
+        # If we don't find a record then either the timer has just elapsed or the
+        # player has been kicked and another player is the active
+        return result is not None
+
+    def delete(self, table_id):
+        table_id = utils.as_object_id(table_id)
+        table = self.db.table.find_one({"_id": table_id})
+
+        if table is not None:
+            self.db.lobby.update({"_id": table.lobby_id}, {"pull": {"tables": table_id}})
+            self.db.lobby.update({"_id": table.lobby_id}, {"set": {"updated_on": datetime.datetime.utcnow()}})
+            self.db.table.remove({"_id": table_id})
+            self.db.event.remove({"table_id", table_id})
+
+    def delete_all(self):
+        self.db.table.remove({})
 
 
-    # --  Player -- #
-    def player_create(self, username):
+class PlayerRepo(object):
+    def __init__(self, client):
+        self.db = client.pangea
+
+    def create(self, username):
         username_lower = username if username else None
 
         player = {
             "username": username,
             "username_lower": username_lower,
-            "updated_on": datetime.utcnow()
+            "updated_on": datetime.datetime.utcnow()
         }
 
         self.db.player.insert(player)
         return Player().from_dict(player)
 
-    def player_update(self, player_id, username):
-        player_id = as_objectid(player_id)
-        username_lower = username if username else None
+    def update(self, player: Player):
+        self.db.player.update({"_id", utils.as_object_id(player.id)}, player.to_document())
 
-        player = {
-            "_id": player_id,
-            "username": username,
-            "username_lower": username_lower,
-            "updated_on": datetime.utcnow()
-        }
-
-        self.db.player.update(player)
-
-    def player_get_by_id(self, player_id):
-        player = self.db.player.find_one({"_id": as_objectid(player_id)})
+    def get_by_id(self, player_id):
+        player = self.db.player.find_one({"_id": utils.as_object_id(player_id)})
         if player is None:
             raise PangeaException(PangaeaDealerErrorCodes.NotFoundError, "Player not found")
 
         return Player().from_dict(player)
 
-    def player_get_by_username(self, username):
-        if username:
-            username = username.lower()
-
-        player = self.db.player.find_one({"username_lower": username})
-        if player is None:
-            raise PangeaException(PangaeaDealerErrorCodes.NotFoundError, "Player not found")
-
-        return player
-
-    def player_username_exists(self, username):
-        if username:
-            username = username.lower()
-
-        player = self.db.player.find_one({"username_lower": username})
-        return player is not None
-
-    def player_get_by_table_id(self, table_id):
+    def get_by_table_id(self, table_id):
         players = []
 
-        table = self.db.table.find_one({"_id": as_objectid(table_id)}, {"seats"})
+        table = self.db.table.find_one({"_id": utils.as_object_id(table_id)}, {"seats"})
         if table and "seats" in table:
             player_ids = []
             for item in table["seats"]:
                 if "player_id" in item:
-                    player_id = as_objectid(item["player_id"])
+                    player_id = utils.as_object_id(item["player_id"])
                     player_ids.append(player_id)
 
             results = list(self.db.player.find({"_id": {"$in": player_ids}}))
@@ -276,7 +200,7 @@ class PangeaDb(object):
                 players.append(Player().from_db(document))
         return players
 
-    def player_get_all(self):
+    def get_all(self):
         results = list(self.db.player.find({}))
 
         players = []
@@ -284,57 +208,21 @@ class PangeaDb(object):
             players.append(Player.from_db(document))
         return players
 
-    def player_join_table(self, table_id, player_id, username, seat_number, stack, playing):
-        table_id = as_objectid(table_id)
-        player_id = as_objectid(player_id)
+    def delete(self, player_id):
+        self.db.player.remove({"_id", utils.as_object_id(player_id)})
 
-        seat = {
-            "_id": ObjectId(),
-            "player_id": player_id,
-            "username": username,
-            "seat_number": seat_number,
-            "stack": stack,
-            "playing": playing
-        }
+    def delete_all(self):
+        self.db.player.remove({})
 
-        self.db.table.update({"_id": table_id}, {"$push": {"seats": seat}})
-        self.table_set_updated(table_id)
 
-        return Seat().from_dict(seat)
+class EventRepo(object):
+    def __init__(self, client):
+        self.db = client.pangea
 
-    def player_leave_table(self, table_id, player_id):
-        table_id = as_objectid(table_id)
-        player_id = as_objectid(player_id)
-
-        self.db.table.update({"_id": table_id}, {"$pull": {"seats": {"player_id": player_id}}})
-        self.table_set_updated(table_id)
-
-    def player_set_bet(self, table_id, player_id, amount):
-        table_id = as_objectid(table_id)
-        player_id = as_objectid(player_id)
-
-        self.db.table.update({"_id": table_id, "seats.player_id": player_id},
-                             {"$set": {"seats.bet": amount}})
-        self.table_set_updated(table_id)
-
-    def player_fold(self, table_id, player_id):
-        table_id = as_objectid(table_id)
-        player_id = as_objectid(player_id)
-
-        self.db.table.update({"_id": table_id, "seats.player_id": player_id},
-                             {"$set": {"seats.playing": False}})
-        self.table_set_updated(table_id)
-
-    def player_update_stack(self, table_id, player_id, amount):
-        table_id = as_objectid(table_id)
-        player_id = as_objectid(player_id)
-        self.db.table.update({"_id": table_id, "seats.player_id": player_id}, {"inc": {"seats.stack": amount}})
-
-    # -- Events -- #
-    def event_create(self, event_name, table_id, seat_number, player_name, bet=None):
+    def create(self, event_name, table_id, seat_number=None, player_name=None, bet=None):
         event = {
             "event_name": event_name,
-            "table_id": as_objectid(table_id),
+            "table_id": utils.as_object_id(table_id),
             "seat_number": seat_number,
             "player_name": player_name
         }
@@ -345,40 +233,47 @@ class PangeaDb(object):
         self.db.event.insert(event)
         return TableEvent().from_dict(event)
 
-    def event_remove(self, event_id):
-        self.db.event.remove({"_id": as_objectid(event_id)})
+    def remove(self, event_id):
+        self.db.event.remove({"_id": utils.as_object_id(event_id)})
 
-    def event_get_by_table_id(self, table_id, since_date):
+    def get_by_table_id(self, table_id, since_date):
+        table_id = utils.as_object_id(table_id)
+
         if since_date:
             # Create a dummy event id which is then used to ensure that only
             # events which were created after the since date are returned
             query_event_id = ObjectId.from_datetime(since_date)
-            query = self.db.event.find({"table_id": as_objectid(table_id), "_id": {"$gt": query_event_id}})
+            query = self.db.event.find({"table_id": table_id, "_id": {"$gt": query_event_id}})
         else:
-            query = self.db.event.find({"table_id": as_objectid(table_id)})
+            query = self.db.event.find({"table_id": table_id})
 
-        results = list(query.sort("_id", 1).limit(50))
+        results = list(query.sort("_id", 1).limit(20))
 
         events = []
         for document in results:
             events.append(TableEvent().from_db(document))
         return events
 
-    # -- Chat messages -- #
-    def chat_create(self, message, table_id):
+
+class ChatRepo(object):
+    def __init__(self, client):
+        self.db = client.pangea
+
+    def create(self, message, table_id):
         chat = {"message": message, "table_id": table_id}
         self.db.chat.insert(chat)
         return ChatMessage().from_dict(chat)
 
-    def chat_get_by_table_id(self, table_id, since_date):
+    def get_by_table_id(self, table_id, since_date):
+        table_id = utils.as_object_id(table_id)
 
         if since_date:
             # Create a dummy chat id which is then used to ensure that only
             # chats which were created after the since date are returned
             query_chat_id = ObjectId.from_datetime(since_date)
-            query = self.db.chat.find({"table_id": as_objectid(table_id), "_id": {"$gt": query_chat_id}})
+            query = self.db.chat.find({"table_id": table_id, "_id": {"$gt": query_chat_id}})
         else:
-            query = self.db.chat.find({"table_id": as_objectid(table_id)})
+            query = self.db.chat.find({"table_id": table_id})
 
         results = list(query.sort("_id", 1).limit(100))
 

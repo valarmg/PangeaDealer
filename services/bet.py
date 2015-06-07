@@ -3,19 +3,19 @@ from services import PangeaDbServiceBase
 from utils.messages import PangeaMessage
 from utils.errors import PangeaException, PangaeaDealerErrorCodes
 from models import *
-from modules import DealerModule2
-from modules import BettingModule2
+from modules import DealerModule
+from modules import BettingModule
 import datetime
-from db.PangeaDb2 import PangeaDb2
+from db import PangeaDb
 
 
 class BetService(PangeaDbServiceBase):
     log = logging.getLogger(__name__)
 
-    def __init__(self, db: PangeaDb2):
+    def __init__(self, db: PangeaDb):
         super().__init__(db)
-        self.dealer_module = DealerModule2(db)
-        self.bet_module = BettingModule2(db)
+        self.dealer_module = DealerModule(db)
+        self.bet_module = BettingModule(db)
 
     def fold(self, table_id, player_id):
         self.log.debug("fold, table_id: {0}, player_id: {1}".format(table_id, player_id))

@@ -1,21 +1,17 @@
 import logging
 import json
-import urllib
 import time
 from email.utils import parsedate
 from datetime import datetime
 
 from tornado.web import RequestHandler
 from utils.messages import PangeaMessage
-from utils.errors import PangaeaDealerErrorCodes
-from db import PangeaDb
 from services.table import TableService
-from services.dealer import DealerService
 from services.lobby import LobbyService
 from services.player import PlayerService
 from services.bet import BetService
 from services.chat import ChatService
-from db.PangeaDb2 import PangeaDb2
+from db import PangeaDb
 
 
 class IndexHandler(RequestHandler):
@@ -35,19 +31,15 @@ class ApiHandler(RequestHandler):
     logger = logging.getLogger(__name__)
 
     db = None
-    dealer_service = None
     table_service = None
     lobby_service = None
     player_service = None
     bet_service = None
     chat_service = None
-
     json_body = None
 
     def initialize(self):
-        #self.db = PangeaDb()
-        self.db = PangeaDb2()
-        self.dealer_service = DealerService(self.db)
+        self.db = PangeaDb()
         self.table_service = TableService(self.db)
         self.lobby_service = LobbyService(self.db)
         self.player_service = PlayerService(self.db)

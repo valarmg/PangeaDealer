@@ -3,7 +3,7 @@ from services import PangeaDbServiceBase
 from utils.messages import PangeaMessage
 from utils.errors import PangeaException, PangaeaDealerErrorCodes
 import models
-from db.PangeaDb2 import PangeaDb2
+from db import PangeaDb
 
 
 class LobbyService(PangeaDbServiceBase):

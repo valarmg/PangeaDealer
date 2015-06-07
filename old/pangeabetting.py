@@ -1,7 +1,3 @@
-from pot import PangeaPot
-from seat import PangeaSeat
-
-
 class PangeaBetting:
     def __init__(self,blind,sm_blind):
         self.big_blind = blind

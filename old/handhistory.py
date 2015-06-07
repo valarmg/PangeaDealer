@@ -1,8 +1,7 @@
 from random import randint
 import datetime
 import sys
-from pangeabetting import PangeaBetting
-from pot import PangeaPot
+
 
 class HandHistory:
 

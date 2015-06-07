@@ -4,9 +4,8 @@ from utils.messages import PangeaMessage
 from services import PangeaDbServiceBase
 from models import *
 from utils.errors import PangeaException, PangaeaDealerErrorCodes
-from modules.dealer import DealerModule
-from db.PangeaDb2 import PangeaDb2
-from modules import DealerModule2
+from db import PangeaDb
+from modules import DealerModule
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +13,7 @@ logger = logging.getLogger(__name__)
 class TableService(PangeaDbServiceBase):
     def __init__(self, db):
         super().__init__(db)
-        self.dealer_module = DealerModule2(db)
+        self.dealer_module = DealerModule(db)
 
     def create_table(self, lobby_id, name, use_default):
         logger.debug("create_table, lobby_id: {0}, name: {1}, use_default: {2}".format(lobby_id, name, use_default))

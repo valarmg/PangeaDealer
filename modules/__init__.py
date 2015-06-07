@@ -4,14 +4,14 @@ from random import shuffle
 from models import *
 import datetime
 from utils import HandRank
-from db.PangeaDb2 import PangeaDb2
+from db import PangeaDb
 import traceback
 
 
-class BettingModule2(object):
+class BettingModule(object):
     log = logging.getLogger(__name__)
 
-    def __init__(self, db: PangeaDb2):
+    def __init__(self, db: PangeaDb):
         self.db = db
 
     def check_or_call(self, table: Table, player: Player):
@@ -98,10 +98,10 @@ class BettingModule2(object):
         return current_bet
 
 
-class DealerModule2(object):
+class DealerModule(object):
     log = logging.getLogger(__name__)
 
-    def __init__(self, db: PangeaDb2):
+    def __init__(self, db: PangeaDb):
         self.db = db
 
     def continue_hand(self, table: Table):

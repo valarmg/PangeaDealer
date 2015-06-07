@@ -1,4 +1,4 @@
-from table.table import PangeaTable
+from old.table import PangeaTable
 
 class PangeaLobby:
     __no_tables = 0

@@ -1,6 +1,7 @@
 from random import shuffle as randshuff
-from pot import PangeaPot
-from pangeabetting import PangeaBetting
+
+from old.pot import PangeaPot
+from old.pangeabetting import PangeaBetting
 
 
 class PangeaDeal:
