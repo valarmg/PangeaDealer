@@ -71,7 +71,7 @@ class Lobby(ModelBase):
 
 
 class Table(ModelBase):
-    TURN_DURATION_IN_SECONDS = 10
+    TURN_DURATION_IN_SECONDS = 30
     DEFAULT_BIG_BLIND = 20
     DEFAULT_SMALL_BLIND = 10
 
@@ -93,6 +93,7 @@ class Table(ModelBase):
         self.pot = None
         self.updated_on = None
         self.default = None
+        self.flip_cards = False
 
     def from_db(self, document):
         super().from_db(document)
@@ -108,9 +109,10 @@ class Table(ModelBase):
         self.turn_time_start = document.get("turn_time_start")
         self.current_bet = document.get("current_bet")
         self.dealing_to_seat_number = document.get("dealing_to_seat_number")
-        self.pot = document.get("Pot")
+        self.pot = document.get("pot")
         self.updated_on = document.get("updated_on")
         self.default = document.get("default")
+        self.flip_cards = document.get("flip_cards")
 
         self.seats = []
         seat_documents = document.get("seats", list())
@@ -122,8 +124,6 @@ class Table(ModelBase):
         return self
 
     def to_dict(self):
-
-        # The deck cards are never included in the json response
         result = {
             "id": self.id,
             "name": self.name,
@@ -132,6 +132,7 @@ class Table(ModelBase):
             "current_round": self.current_round,
             "turn_time_start": self.turn_time_start,
             "seats": [x.to_dict() for x in self.seats],
+            "deck_cards": self.deck_cards,
             "board_cards": self.board_cards,
             "small_blind": self.small_blind,
             "big_blind": self.big_blind,
@@ -140,15 +141,10 @@ class Table(ModelBase):
             "pot": self.pot,
             "updated_on": self.updated_on,
             "default": self.default,
+            "flip_cards": self.flip_cards
         }
 
         return remove_nulls(result)
-
-    def to_document(self):
-        # The decks cards aren't included in the json response but still need to be saved to the database
-        doc = super().to_document()
-        doc["deck_cards"] = self.deck_cards
-        return doc
 
     def get_dealer_seat(self, playing_only=True):
         if self.dealer_seat_number is None:
@@ -231,6 +227,12 @@ class Table(ModelBase):
         for seat in self.seats:
             seat.playing = True
             seat.hole_cards = []
+
+        self.clear_seat_bets_statuses()
+
+    def clear_seat_bets_statuses(self):
+        for seat in self.seats:
+            seat.status = ""
             seat.bet = 0
 
 
@@ -255,16 +257,18 @@ class Player(ModelBase):
 
 class Seat(ModelBase):
 
-    def __init__(self, player_id=None, seat_number=None, username=None,
-                 stack=None, hole_cards=None, bet=None, playing=None):
+    def __init__(self, player_id=None, seat_number=None, username=None, stack=None,
+                 hole_cards=None, flipped_cards=None, bet=None, playing=None, status=None):
         super().__init__()
         self.player_id = utils.as_object_id(player_id)
         self.seat_number = seat_number
         self.username = username
         self.stack = stack
         self.hole_cards = hole_cards
+        self.flipped_cards = flipped_cards
         self.bet = bet
         self.playing = playing
+        self.status = status
 
     def from_db(self, document):
         super().from_db(document)
@@ -273,8 +277,10 @@ class Seat(ModelBase):
         self.username = document.get("username")
         self.stack = document.get("stack")
         self.hole_cards = document.get("hole_cards")
+        self.flipped_cards = document.get("flipped_cards")
         self.bet = document.get("bet")
         self.playing = document.get("playing")
+        self.status = document.get("status")
         return self
 
     def to_dict(self):
@@ -285,13 +291,18 @@ class Seat(ModelBase):
             "username": self.username,
             "stack": self.stack,
             "hole_cards": self.hole_cards,
+            "flipped_cards": self.flipped_cards,
             "bet": self.bet,
-            "playing": self.playing
+            "playing": self.playing,
+            "status": self.status
         }
         return remove_nulls(result)
 
     def get_bet(self):
         return int(self.bet) if self.bet else 0
+
+    def get_stack(self):
+        return int(self.stack) if self.stack else 0
 
 
 class ChatMessage(ModelBase):
@@ -302,10 +313,13 @@ class ChatMessage(ModelBase):
     PLAYER_FOLD = "{0} has folded"
     PLAYER_TIMEOUT = "{0} has timed out"
     PLAYER_CALL = "{0} has called"
+    PLAYER_WIN = "{0} has won the pot {1}"
+    PLAYER_CARD_FLIP = "{0}'s hand {1}"
+    PLAYER_TURN = "It is {0}'s turn next"
     DEAL_PREFLOP = "Dealing preflop"
-    DEAL_FLOP = "Dealing flop"
-    DEAL_TURN = "Dealing turn"
-    DEAL_RIVER = "Dealing river"
+    DEAL_FLOP = "Dealing flop {0}"
+    DEAL_TURN = "Dealing turn {0}"
+    DEAL_RIVER = "Dealing river {0}"
     DEAL_END = "Ending game"
 
     def __init__(self, message=None, player_name=None):
@@ -337,7 +351,6 @@ class TableEvent(ModelBase):
     PLAYER_CALL = "player_call"
     PLAYER_RAISE = "player_call"
     HAND_COMPLETE = "hand_complete"
-
 
     def __init__(self):
         super().__init__()

@@ -101,20 +101,32 @@ class TableService(PangeaDbServiceBase):
         # TODO: This should properly return a 304 error if the table has been updated, no events have happened
         # TODO: and no chats have been sent
 
-        # TODO: Only your own cards should be returned. The deck should not be returned, or any other player's cards
         table = self.db.table.get_by_id(table_id)
 
         events = None
         chats = None
         if last_check:
-            # Only new events/chats
+            # Only new events/chats are returned
             events = self.db.event.get_by_table_id(table_id, last_check)
             chats = self.db.chat.get_by_table_id(table_id, last_check)
 
-        return PangeaMessage(table=table, events=events, chats=chats)
+        table.deck_cards = None
+        player_seat = table.organised_seats.get_seat_by_player_id(player_id)
+
+        # Unless we on the last round (river or everyone has folded),
+        # we should not return the cards of other players
+        for seat in table.seats:
+            if seat.player_id != player_id:
+                if table.flip_cards:
+                    seat.hole_cards = seat.flipped_cards
+                else:
+                    seat.hole_cards = None
+            seat.flipped_cards = None
+
+        return PangeaMessage(table=table, player_seat=player_seat, events=events, chats=chats)
 
     def delete_table(self, table_id):
-        logger.debug("kick_timed_out_players, table_id: {0}", table_id)
+        logger.debug("delete_table, table_id: {0}", table_id)
 
         if table_id:
             self.db.table.delete(table_id)
@@ -123,10 +135,19 @@ class TableService(PangeaDbServiceBase):
 
         return PangeaMessage()
 
-    def kick_timed_out_players(self):
-        #logger.debug("kick_timed_out_players")
+    def delete_default_table(self):
+        logger.debug("delete_default_table, table_id: {0}")
 
-        tables = self.db.table.get_all_with_timer()
+        table = self.db.table.get_default()
+        if table:
+            self.db.table.delete(table.id)
+        return PangeaMessage()
+
+    def check_tables(self):
+        tables = self.db.table.get_all()
         for table in tables:
-            if self.dealer_module.kick_timed_out_players(table):
+            kicked_out_players = self.dealer_module.kick_timed_out_players(table)
+            restarted_game = self.dealer_module.restart_table(table)
+
+            if kicked_out_players or restarted_game:
                 self.db.table.update(table)

@@ -129,8 +129,13 @@ class TableHandler(ApiHandler):
 
     def delete(self,):
         table_id = self.get_query_argument("table_id", None)
+        default = self.get_query_argument("default", False)
 
-        response = self.table_service.delete_table(table_id)
+        if default:
+            response = self.table_service.delete_default_table()
+        else:
+            response = self.table_service.delete_table(table_id)
+
         self.send_pangea_response(response)
 
 

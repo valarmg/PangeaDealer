@@ -62,7 +62,7 @@ class PangeaApp(WSGIApplication):
         callback.start()
 
     def kick_timed_out_players(self):
-        self.table_service.kick_timed_out_players()
+        self.table_service.check_tables()
 
     def get_routes(self):
         return [handler.regex.pattern for handler in self.handlers[0][1] if handler.regex.pattern.startswith("/api")]

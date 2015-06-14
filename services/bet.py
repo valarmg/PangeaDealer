@@ -45,7 +45,7 @@ class BetService(PangeaDbServiceBase):
         table = self.db.table.get_by_id(table_id)
         player = self.db.player.get_by_id(player_id)
 
-        self.bet_module.check(table, player)
+        self.bet_module.check_or_call(table, player)
         self.dealer_module.continue_hand(table)
         self.db.table.update(table)
 
@@ -63,10 +63,6 @@ class BetService(PangeaDbServiceBase):
 
         table = self.db.table.get_by_id(table_id)
         player = self.db.player.get_by_id(player_id)
-
-        # TODO:
-        # Rather than having a is_raise flag sent in the request, determine if
-        # it's a raise by checking if it is over the current bet
 
         self.bet_module.bet(table, player, amount)
         self.dealer_module.continue_hand(table)

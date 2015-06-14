@@ -13,10 +13,10 @@ class PangeaDb(object):
 
         if "OPENSHIFT_MONGODB_DB_URL" in os.environ:
             self.client = MongoClient(os.environ["OPENSHIFT_MONGODB_DB_URL"])
-            self.log.debug("Created connection to Open Shift database")
+            #self.log.debug("Created connection to Open Shift database")
         else:
             self.client = MongoClient("localhost", 27017)
-            self.log.debug("Created connection to local database")
+            #self.log.debug("Created connection to local database")
 
         self.lobby = LobbyRepo(self.client)
         self.table = TableRepo(self.client)
@@ -146,12 +146,13 @@ class TableRepo(object):
     def delete(self, table_id):
         table_id = utils.as_object_id(table_id)
         table = self.db.table.find_one({"_id": table_id})
+        lobby_id = utils.as_object_id(table.get("lobby_id"))
 
         if table is not None:
-            self.db.lobby.update({"_id": table.lobby_id}, {"pull": {"tables": table_id}})
-            self.db.lobby.update({"_id": table.lobby_id}, {"set": {"updated_on": datetime.datetime.utcnow()}})
+            self.db.lobby.update({"_id": lobby_id}, {"pull": {"tables": table_id}})
+            self.db.lobby.update({"_id": lobby_id}, {"set": {"updated_on": datetime.datetime.utcnow()}})
             self.db.table.remove({"_id": table_id})
-            self.db.event.remove({"table_id", table_id})
+            self.db.event.remove({"table_id": table_id})
 
     def delete_all(self):
         self.db.table.remove({})

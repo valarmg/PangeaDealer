@@ -2,9 +2,9 @@
 class PangaeaDealerErrorCodes():
     NA = 0
     InvalidArgumentError = 200
-    NotFoundError = 201,
-    AlreadyExists = 202,
-    BettingError = 203,
+    NotFoundError = 201
+    AlreadyExists = 202
+    BettingError = 203
     ServerError = 299
 
 

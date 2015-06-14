@@ -9,50 +9,61 @@ import traceback
 
 
 class BettingModule(object):
-    log = logging.getLogger(__name__)
 
     def __init__(self, db: PangeaDb):
         self.db = db
+        self.log = logging.getLogger(__name__)
 
     def check_or_call(self, table: Table, player: Player):
-        player_seat = table.organised_seats.get_seat_by_player_id(player.id)
-        active_player_seat = table.get_active_seat()
+        self.log.debug("check_or_call, table_id: {0}, player_id: {1}".format(table.id, player.id))
 
-        if player_seat is None:
-            raise PangeaException(PangaeaDealerErrorCodes.BettingError, "Player is not sitting on the table")
-        if active_player_seat is None or player_seat.seat_number != active_player_seat.seat_number():
-            raise PangeaException(PangaeaDealerErrorCodes.BettingError, "Cannot bet out of turn")
-        if not table.has_turn_expired():
-            raise PangeaException(PangaeaDealerErrorCodes.BettingError, "The players turn has expired")
-
-        min_bet = self.calculate_min_check_or_call(table)
-        if min_bet > 0:
-            player_seat.bet = min_bet
-
-            self.db.chat.create(ChatMessage.PLAYER_CALL.format(player.username), table.id)
-            self.db.event.create(TableEvent.PLAYER_CALL, table.id, player_seat.seat_number, player.username)
-        else:
-            self.db.chat.create(ChatMessage.PLAYER_CHECK.format(player.username), table.id)
-            self.db.event.create(TableEvent.PLAYER_CHECK, table.id, player_seat.seat_number, player.username)
-
-    def bet(self, table: Table, player: Player, bet):
         player_seat = table.organised_seats.get_seat_by_player_id(player.id)
         active_player_seat = table.get_active_seat()
 
         if player_seat is None:
             raise PangeaException(PangaeaDealerErrorCodes.BettingError, "Player is not sitting on the table")
         if active_player_seat is None or player_seat.seat_number != active_player_seat.seat_number:
-            self.log.debug("Cannot bet out of turn, active seat: {0}, player seat: {1}"
-                           .format(active_player_seat.seat_number, player_seat.seat_number))
+            raise PangeaException(PangaeaDealerErrorCodes.BettingError, "Cannot bet out of turn")
+        if table.has_turn_expired():
+            raise PangeaException(PangaeaDealerErrorCodes.BettingError, "The players turn has expired")
+
+        min_bet = self.calculate_min_check_or_call(table)
+        if min_bet > 0:
+            player_seat.bet = min_bet
+            player_seat.status = "<span>Call</span>"
+            player_seat.stack = player_seat.get_stack() - min_bet
+            table.pot = table.get_pot() + min_bet
+
+            self.db.chat.create(ChatMessage.PLAYER_CALL.format(player.username), table.id)
+            self.db.event.create(TableEvent.PLAYER_CALL, table.id, player_seat.seat_number, player.username)
+        else:
+            player_seat.status = "<span>Check</span>"
+
+            self.db.chat.create(ChatMessage.PLAYER_CHECK.format(player.username), table.id)
+            self.db.event.create(TableEvent.PLAYER_CHECK, table.id, player_seat.seat_number, player.username)
+
+    def bet(self, table: Table, player: Player, bet):
+        self.log.debug("bet, table_id: {0}, player_id: {1}, Bet: {2}".format(table.id, player.id, bet))
+
+        player_seat = table.organised_seats.get_seat_by_player_id(player.id)
+        active_player_seat = table.get_active_seat()
+
+        if player_seat is None:
+            raise PangeaException(PangaeaDealerErrorCodes.BettingError, "Player is not sitting on the table")
+        if active_player_seat is None or player_seat.seat_number != active_player_seat.seat_number:
+            self.log.debug("Cannot bet out of turn, active seat: {0}, player seat: {1}".format(
+                active_player_seat.seat_number if active_player_seat else "", player_seat.seat_number))
             raise PangeaException(PangaeaDealerErrorCodes.BettingError, "Cannot bet out of turn")
         if table.has_turn_expired():
             raise PangeaException(PangaeaDealerErrorCodes.BettingError, "The players turn has expired")
 
         try:
-            total_bet = player_seat.get_bet() + int(bet)
+            bet = int(bet)
         except ValueError:
             self.log.error("Invalid bet amount, bet: {0}, exception: {1}".format(bet, traceback.format_exc()))
             raise PangeaException(PangaeaDealerErrorCodes.InvalidArgumentError, "Invalid bet amount")
+
+        total_bet = player_seat.get_bet() + bet
 
         min_bet = self.calculate_min_raise(table)
         if total_bet < min_bet:
@@ -60,7 +71,11 @@ class BettingModule(object):
                                   "The player must bet at least: {0}".format(min_bet))
 
         table.current_bet = total_bet
+        table.pot = table.get_pot() + bet
+
         player_seat.bet = total_bet
+        player_seat.stack = player_seat.get_stack() - bet
+        player_seat.status = "<span>Bet<br/>{0}</span>".format(bet)
 
         self.db.chat.create(ChatMessage.PLAYER_BET.format(player.username, bet), table.id)
         self.db.event.create(TableEvent.PLAYER_BET, table.id, player_seat.seat_number, player.username, bet=bet)
@@ -74,12 +89,14 @@ class BettingModule(object):
 
         if player_seat is None:
             raise PangeaException(PangaeaDealerErrorCodes.BettingError, "Player is not sitting on the table")
-        if selected_player is None or player_seat.seat_number != selected_player.seat_number():
+        if selected_player is None or player_seat.seat_number != selected_player.seat_number:
             raise PangeaException(PangaeaDealerErrorCodes.BettingError, "Cannot fold out of turn")
         if table.has_turn_expired():
             raise PangeaException(PangaeaDealerErrorCodes.BettingError, "The players turn has expired")
 
         player_seat.playing = False
+        player.status = "<span>Fold</span>"
+        player.bet = 0
 
         self.db.chat.create(ChatMessage.PLAYER_FOLD.format(player_seat.username), table.id)
         self.db.event.create(TableEvent.PLAYER_FOLD.format(player_seat.username), table.id,
@@ -99,10 +116,10 @@ class BettingModule(object):
 
 
 class DealerModule(object):
-    log = logging.getLogger(__name__)
 
     def __init__(self, db: PangeaDb):
         self.db = db
+        self.log = logging.getLogger(__name__)
 
     def continue_hand(self, table: Table):
         self.log.debug("continue_hand. table_id: {0}".format(table.id))
@@ -140,9 +157,6 @@ class DealerModule(object):
         self.deal(table)
 
     def kick_timed_out_players(self, table: Table):
-        self.log.debug("kick_timed_out_players, table_id: {0}, turn_time_start (UTC): {1}"
-                       .format(table.id, table.turn_time_start))
-
         require_update = False
 
         if table.get_current_round() == Round.NA:
@@ -166,6 +180,15 @@ class DealerModule(object):
         # Stop the hand if there is only one player left
         if not self.has_table_enough_players(table):
             self.end_hand(table)
+            require_update = True
+
+        return require_update
+
+    def restart_table(self, table: Table):
+        require_update = False
+
+        if table.get_current_round() == Round.NA and self.has_table_enough_players(table):
+            self.start_hand(table)
             require_update = True
 
         return require_update
@@ -210,8 +233,8 @@ class DealerModule(object):
             table.current_round = Round.PreFlop
             self.deal(table)
         else:
-            self.log.debug("Cannot start a new hand. Either there are not enough players, or the hand is "
-                           + "already in progress")
+            self.log.debug("Cannot start a new hand. Either there are not enough players, or "
+                           + "the hand is already in progress")
 
     def end_hand(self, table: Table):
         self.log.debug("end_hand, table_id: {0}".format(table.id))
@@ -232,7 +255,18 @@ class DealerModule(object):
             winning_seat = self.determine_table_winner(table)
 
         if winning_seat:
-            winning_seat.stack = winning_seat.stack + table.get_pot()
+            self.log.debug("Winner seating, seat_number: {0}, pot: {1}"
+                           .format(winning_seat.seat_number, table.get_pot()))
+            winning_seat.stack = winning_seat.get_stack() + table.get_pot()
+
+            for seat in playing_seats:
+                cards = ",".join(seat.hole_cards) if seat.hole_cards else ""
+                message = ChatMessage.PLAYER_CARD_FLIP.format(seat.username, cards)
+                self.db.chat.create(message, table.id)
+
+            message = ChatMessage.PLAYER_WIN.format(winning_seat.username, table.get_pot())
+            self.db.chat.create(message, table.id)
+
             table.end_hand()
             self.move_dealer_seat(table)
 
@@ -271,13 +305,16 @@ class DealerModule(object):
             # Otherwise get the next seat
             player_seat = table.organised_seats.get_next_seat(player_seat.seat_number)
 
-        self.set_active_seat_number(table, player_seat.seat_number)
+        self.set_active_seat(table, player_seat)
 
-    def set_active_seat_number(self, table: Table, seat_number):
-        table.active_seat_number = seat_number
+    def set_active_seat(self, table: Table, seat: Seat):
+        table.active_seat_number = seat.seat_number
         table.turn_time_start = datetime.datetime.utcnow()
 
-        self.log.debug("Moved active seat, seat_number: {0}, turn_time_start: {1}"
+        message = ChatMessage.PLAYER_TURN.format(seat.username)
+        self.db.chat.create(message, table.id)
+
+        self.log.debug("Set active seat, seat_number: {0}, turn_time_start: {1}"
                        .format(table.active_seat_number, table.turn_time_start))
 
     def move_dealer_seat(self, table: Table):
@@ -303,7 +340,9 @@ class DealerModule(object):
             self.log.debug("Cannot deal when there are less than 2 players in the hand")
             return
 
+        table.current_bet = 0
         current_round = table.get_current_round()
+        table.clear_seat_bets_statuses()
 
         if current_round == Round.PreFlop:
             self.deal_preflop(table)
@@ -324,18 +363,23 @@ class DealerModule(object):
             if not big_blind_seat:
                 raise PangeaException(PangaeaDealerErrorCodes.ServerError, "No big blind was found")
             seat = table.organised_seats.get_next_seat(big_blind_seat.seat_number)
-            self.set_active_seat_number(table, seat.seat_number)
+            self.set_active_seat(table, seat)
         else:
             seat = table.organised_seats.get_next_seat(table.dealer_seat_number)
-            self.set_active_seat_number(table, seat.seat_number)
+            self.set_active_seat(table, seat)
 
         # Everyone in the hand must be allowed to bet. So the last person in the hand
         # must be sitting to the right of the first person to bet
         dealing_to_seat = table.organised_seats.get_previous_seat(table.active_seat_number)
         table.dealer_seat_number = dealing_to_seat.seat_number
+        table.dealing_to_seat_number = dealing_to_seat.seat_number
 
     def deal_preflop(self, table: Table):
         self.log.debug("deal_preflop, table_id: {0}, current_round: {1}".format(table.id, table.current_round))
+
+        table.flip_cards = False
+        for seat in table.seats:
+            seat.flipped_cards = None
 
         # Make sure that a dealer has been set
         if table.dealer_seat_number is None:
@@ -343,6 +387,7 @@ class DealerModule(object):
             if seat is None:
                 self.log.debug("Cannot deal a preflop if there are no playing players")
                 return
+
             table.dealer_seat_number = seat.seat_number
 
         # Create a deck
@@ -353,6 +398,11 @@ class DealerModule(object):
             cards = self.deal_cards_from_deck(table.deck_cards, 2)
             seat.hole_cards = cards
 
+        # Set blinds
+        table.current_bet = table.get_big_blind()
+        table.get_big_blind_seat().current_bet = table.get_big_blind()
+        table.get_small_blind_seat().current_bet = table.get_small_blind()
+
         self.db.chat.create(ChatMessage.DEAL_PREFLOP, table.id)
 
     def deal_flop(self, table: Table):
@@ -361,23 +411,34 @@ class DealerModule(object):
         # Deal the board cards
         table.board_cards = self.deal_cards_from_deck(table.deck_cards, 3)
 
-        self.db.chat.create(ChatMessage.DEAL_FLOP, table.id)
+        message = ChatMessage.DEAL_FLOP.format(",".join(table.board_cards))
+        self.db.chat.create(message, table.id)
 
     def deal_turn(self, table):
         self.log.debug("deal_turn, table_id: {0}".format(table.id))
 
         # Deal the board cards
-        table.board_cards = self.deal_cards_from_deck(table.deck_cards, 1)
+        if not table.board_cards:
+            raise PangeaException(PangaeaDealerErrorCodes.ServerError,
+                                  "Trying to deal the turn but no other cards have been dealt yet")
 
-        self.db.chat.create(ChatMessage.DEAL_TURN, table.id)
+        turn_card = self.deal_cards_from_deck(table.deck_cards, 1)[0]
+        table.board_cards.append(turn_card)
+
+        self.db.chat.create(ChatMessage.DEAL_TURN.format(turn_card), table.id)
 
     def deal_river(self, table):
         self.log.debug("deal_river, table_id: {0}".format(table.id))
 
         # Deal the board cards
-        table.board_cards = self.deal_cards_from_deck(table.deck_cards, 1)
+        if not table.board_cards:
+            raise PangeaException(PangaeaDealerErrorCodes.ServerError,
+                                  "Trying to deal the river but no other cards have been dealt yet")
 
-        self.db.chat.create(ChatMessage.DEAL_RIVER, table.id)
+        river_card = self.deal_cards_from_deck(table.deck_cards, 1)[0]
+        table.board_cards.append(river_card)
+
+        self.db.chat.create(ChatMessage.DEAL_RIVER.format(river_card), table.id)
 
     def determine_table_winner(self, table: Table):
         seats = table.organised_seats.get_playing_seats()
@@ -385,13 +446,19 @@ class DealerModule(object):
         winning_seat = None
         winning_score = 0
 
+        # Flip the cards so players will know why they won or lost
+        table.flip_cards = True
+        for seat in table.seats:
+            if seat.playing:
+                seat.flipped_cards = seat.hole_cards
+
         for seat in seats:
             hand_rank_str, score = HandRank.evaluate_hand(table.board_cards, seat.hole_cards)
-            self.log.debug("hand_rank_str: {0}, score: {1}", hand_rank_str, score)
+            self.log.debug("hand_rank_str: {0}, score: {1}".format(hand_rank_str, score))
 
             if winning_seat is None or score > winning_score:
                 winning_score = score
-                winning_seat = seats
+                winning_seat = seat
 
         return winning_seat
 
