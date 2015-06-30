@@ -24,7 +24,7 @@ class IndexHandler(RequestHandler):
         else:
             base_url = "http://{0}:{1}".format(self.application.host_name, self.application.port)
 
-        self.render("index.html", base_url=base_url, routes=self.application.get_routes())
+        self.render(".indexhtml", base_url=base_url, routes=self.application.get_routes())
 
 
 class ApiHandler(RequestHandler):
